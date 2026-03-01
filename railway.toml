@@ -1,0 +1,17 @@
+[build]
+builder = "nixpacks"
+
+[build.nixpacks]
+providers = ["python"]
+
+[deploy]
+startCommand = "pip install -r requirements.txt && python main.py"
+restartPolicyType = "always"
+restartPolicyMaxRetries = 10
+
+[[services]]
+name = "mafia-bot"
+protocol = "tcp"
+
+[env]
+PYTHONUNBUFFERED = "1"
