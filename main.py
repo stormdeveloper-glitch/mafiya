@@ -766,10 +766,15 @@ if ADMIN_ID and ADMIN_ID != 0:
 # ================== HELPERS ==================
 
 async def is_bot_admin(context, chat_id: int) -> bool:
+    # Private chatlarda bot har doim "admin"
+    if chat_id > 0:
+        return True
     try:
         admins = await context.bot.get_chat_administrators(chat_id)
         return any(a.user.id == context.bot.id for a in admins)
     except Exception as e:
+        if "private chat" in str(e).lower():
+            return True
         logger.error(f"Error checking bot admin status: {e}")
         return False
 
@@ -802,8 +807,22 @@ async def safe_send_photo(context, chat_id: int, photo_url: str, caption: str):
     """Rasm yuborishga urinadi, xato bo'lsa matn yuboradi"""
     try:
         await context.bot.send_photo(chat_id, photo_url, caption=caption)
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error sending photo: {e}")
         await context.bot.send_message(chat_id, caption)
+
+async def safe_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, **kwargs):
+    """Xatolikka chidamli javob qaytarish"""
+    if not update.message:
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=text, **kwargs)
+        return
+    try:
+        await update.message.reply_text(text, quote=False, **kwargs)
+    except Exception:
+        try:
+            await context.bot.send_message(chat_id=update.effective_chat.id, text=text, **kwargs)
+        except Exception as e:
+            logger.error(f"Safe reply failed: {e}")
 
 async def send_role_message(context, player: Player, game: Game):
     """O'yinchiga uning roli va amallarini yuborish"""
@@ -927,39 +946,39 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "/stopgame - O'yinni to'xtating\n"
                 "/resetgame - O'yinni tikla")
 
-    await update.message.reply_text(text)
+    await safe_reply(update, context, text)
 
 async def lang(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if check_cooldown(uid):
-        await update.message.reply_text(cooldown_msg(uid))
+        await safe_reply(update, context, cooldown_msg(uid))
         return
     kb = [
         [InlineKeyboardButton("🇺🇿 O'zbek", callback_data="lang_uz")],
         [InlineKeyboardButton("🇷🇺 Русский", callback_data="lang_ru")],
         [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
     ]
-    await update.message.reply_text("🌍 Tilni tanlang / Выберите язык / Choose language:",
-                                    reply_markup=InlineKeyboardMarkup(kb))
+    await safe_reply(update, context, "🌍 Tilni tanlang / Выберите язык / Choose language:",
+                    reply_markup=InlineKeyboardMarkup(kb))
 
 async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if check_cooldown(uid):
-        await update.message.reply_text(cooldown_msg(uid))
+        await safe_reply(update, context, cooldown_msg(uid))
         return
     money = get_uid_data(uid)["money"]
-    await update.message.reply_text(t(uid, "balance").format(money))
+    await safe_reply(update, context, t(uid, "balance").format(money))
 
 async def shop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     uid = update.effective_user.id
 
     if check_cooldown(uid):
-        await update.message.reply_text(cooldown_msg(uid))
+        await safe_reply(update, context, cooldown_msg(uid))
         return
 
     if chat_id in games and games[chat_id].state not in ("registration", "end", "stopped"):
-        await update.message.reply_text(t(uid, "shop_blocked"))
+        await safe_reply(update, context, t(uid, "shop_blocked"))
         return
 
     user_data = get_uid_data(uid)
@@ -980,33 +999,33 @@ async def shop(update: Update, context: ContextTypes.DEFAULT_TYPE):
         shop_text += f"  📺 {item_data['anime']}\n"
         shop_text += f"  {item_data['desc']}\n\n"
 
-    await update.message.reply_text(shop_text, reply_markup=InlineKeyboardMarkup(kb))
+    await safe_reply(update, context, shop_text, reply_markup=InlineKeyboardMarkup(kb))
 
 async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if check_cooldown(uid):
-        await update.message.reply_text(cooldown_msg(uid))
+        await safe_reply(update, context, cooldown_msg(uid))
         return
     if not is_user_admin(uid):
-        await update.message.reply_text(t(uid, "not_admin"))
+        await safe_reply(update, context, t(uid, "not_admin"))
         return
     kb = [
         [InlineKeyboardButton("👥 " + t(uid, "admins_list"), callback_data="list_admins")],
         [InlineKeyboardButton("🛑 " + t(uid, "stop_game"), callback_data="admin_stop_game")],
     ]
-    await update.message.reply_text(t(uid, "admin_panel"), reply_markup=InlineKeyboardMarkup(kb))
+    await safe_reply(update, context, t(uid, "admin_panel"), reply_markup=InlineKeyboardMarkup(kb))
 
 async def stopgame(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     chat_id = update.effective_chat.id
     if check_cooldown(uid):
-        await update.message.reply_text(cooldown_msg(uid))
+        await safe_reply(update, context, cooldown_msg(uid))
         return
     if not is_user_admin(uid):
-        await update.message.reply_text(t(uid, "not_admin"))
+        await safe_reply(update, context, t(uid, "not_admin"))
         return
     if chat_id not in games:
-        await update.message.reply_text(t(uid, "game_not_found"))
+        await safe_reply(update, context, t(uid, "game_not_found"))
         return
     games[chat_id].state = "stopped"
     del games[chat_id]
@@ -1100,9 +1119,12 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         except Exception as e:
             logger.error(f"Error sending profile photo from DB for {uid}: {e}")
+            # Fallback to text only if photo fails or message is missing
+            await safe_reply(update, context, text, parse_mode="HTML", reply_markup=kb)
+            return
 
     # Rasmsiz profil
-    await update.message.reply_text(text, parse_mode="HTML", reply_markup=kb)
+    await safe_reply(update, context, text, parse_mode="HTML", reply_markup=kb)
 
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1137,7 +1159,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             msg = "✅ Profil rasmi yangilandi! Ko'rish uchun /profile."
 
-        await update.message.reply_text(msg)
+        await safe_reply(update, context, msg)
         logger.info(f"User {uid} updated profile photo in Database.")
 
     except Exception as e:
@@ -1147,23 +1169,23 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def addadmin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if not is_user_admin(uid):
-        await update.message.reply_text(t(uid, "not_admin"))
+        await safe_reply(update, context, t(uid, "not_admin"))
         return
     if not context.args:
-        await update.message.reply_text("❓ Ishlatish: /addadmin <user_id>")
+        await safe_reply(update, context, "❓ Ishlatish: /addadmin <user_id>")
         return
     try:
         new_admin_id = int(context.args[0])
     except ValueError:
-        await update.message.reply_text("❌ ID raqam bo'lishi kerak")
+        await safe_reply(update, context, "❌ ID raqam bo'lishi kerak")
         return
     if new_admin_id in ADMINS:
-        await update.message.reply_text(f"⚠️ {new_admin_id} allaqachon admin")
+        await safe_reply(update, context, f"⚠️ {new_admin_id} allaqachon admin")
         return
     ADMINS.add(new_admin_id)
     DB.add_admin(new_admin_id)
     logger.info(f"Admin {uid} added new admin: {new_admin_id}")
-    await update.message.reply_text(f"✅ {new_admin_id} admin qilindi!\n👥 Jami adminlar: {len(ADMINS)}")
+    await safe_reply(update, context, f"✅ {new_admin_id} admin qilindi!\n👥 Jami adminlar: {len(ADMINS)}")
 
 async def removeadmin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -1192,30 +1214,30 @@ async def removeadmin(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def listadmins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if not is_user_admin(uid):
-        await update.message.reply_text(t(uid, "not_admin"))
+        await safe_reply(update, context, t(uid, "not_admin"))
         return
     if not ADMINS:
-        await update.message.reply_text("👥 Adminlar yo'q")
+        await safe_reply(update, context, "👥 Adminlar yo'q")
         return
     lines = []
     for a in ADMINS:
         tag = " 👑 (asosiy)" if a == ADMIN_ID else ""
         lines.append(f"• {a}{tag}")
-    await update.message.reply_text(f"👨‍💼 Adminlar ro'yxati ({len(ADMINS)}):\n\n" + "\n".join(lines))
+    await safe_reply(update, context, f"👨‍💼 Adminlar ro'yxati ({len(ADMINS)}):\n\n" + "\n".join(lines))
 
 async def resetgame(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     chat_id = update.effective_chat.id
     if check_cooldown(uid):
-        await update.message.reply_text(cooldown_msg(uid))
+        await safe_reply(update, context, cooldown_msg(uid))
         return
     if not is_user_admin(uid):
-        await update.message.reply_text(t(uid, "not_admin"))
+        await safe_reply(update, context, t(uid, "not_admin"))
         return
     if chat_id in games:
         games[chat_id].state = "stopped"
         del games[chat_id]
-    await update.message.reply_text("✅ O'yin tiklandi / Сброс выполнен / Game reset")
+    await safe_reply(update, context, "✅ O'yin tiklandi / Сброс выполнен / Game reset")
 
 async def join_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
@@ -1224,43 +1246,50 @@ async def join_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     game = games.get(chat_id)
     if not game:
-        await update.message.reply_text("❌ O'yin yo'q. /newgame")
+        await safe_reply(update, context, "❌ O'yin yo'q. /newgame")
         return
     if game.state != "registration":
-        await update.message.reply_text("⛔ Ro'yxatga olish yopiq.")
+        await safe_reply(update, context, "⛔ Ro'yxatga olish yopiq.")
         return
     if uid in game.players:
-        await update.message.reply_text(t(uid, "already_joined"))
+        await safe_reply(update, context, t(uid, "already_joined"))
         return
 
     game.players[uid] = Player(uid, first_name)
-    await update.message.reply_text(f"✅ {first_name} qo'shildi! Jami: {len(game.players)}")
+    await safe_reply(update, context, f"✅ {first_name} qo'shildi! Jami: {len(game.players)}")
 
 async def newgame(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     uid = update.effective_user.id
 
     if check_cooldown(uid):
-        await update.message.reply_text(cooldown_msg(uid))
+        await safe_reply(update, context, cooldown_msg(uid))
         return
 
     error = validate_game_state(chat_id)
     if error:
-        await update.message.reply_text(error)
+        await safe_reply(update, context, error)
         return
 
     if not await is_bot_admin(context, chat_id):
-        await update.message.reply_text(t(uid, "need_admin") + "\n" + t(uid, "make_admin"))
+        await safe_reply(update, context, t(uid, "need_admin") + "\n" + t(uid, "make_admin"))
         return
 
     game = Game(chat_id)
     games[chat_id] = game
     logger.info(f"New game started in chat {chat_id} by user {uid}")
 
-    msg = await update.message.reply_text(
-        t(uid, "reg_started"),
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Qo'shilish / Join", callback_data="join")]])
-    )
+    try:
+        msg = await update.message.reply_text(
+            t(uid, "reg_started"),
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Qo'shilish / Join", callback_data="join")]])
+        )
+    except Exception:
+        msg = await context.bot.send_message(
+            chat_id,
+            t(uid, "reg_started"),
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Qo'shilish / Join", callback_data="join")]])
+        )
     game.reg_msg_id = msg.message_id
     try:
         await context.bot.pin_chat_message(chat_id, msg.message_id, disable_notification=True)
