@@ -1,5 +1,6 @@
 # advanced_secret_mafia_bot.py
 # PROFESSIONAL PRODUCTION VERSION - ANIME THEMED MAFIA GAME
+# RESTART TRIGGER: 2026-03-01 22:31
 
 import asyncio
 import random
