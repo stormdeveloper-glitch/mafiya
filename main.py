@@ -755,8 +755,13 @@ class Game:
         self.private_votes: Dict[int, int] = {}
         self.public_votes: Dict[str, set] = {"like": set(), "dislike": set()}
         self.round = 0
+        self._accused_target: Optional[int] = None   # final vote ayblanuvchi
+        self._vote_msg_id: Optional[int] = None      # guruh ovoz xabar ID
 
 games: Dict[int, Game] = {}
+
+# Bot username (post_init da to'ldiriladi)
+BOT_USERNAME: str = ""
 
 # Adminlarni bazadan yuklash, ADMIN_ID ni ham qo'shish
 ADMINS: set = DB.get_admins()
@@ -907,6 +912,64 @@ async def check_win_conditions(context, chat_id: int) -> Optional[str]:
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
+    chat = update.effective_chat
+
+    # Foydalanuvchini DBga qo'shish/yangilash
+    DB.create_user(uid, update.effective_user.full_name, update.effective_user.username)
+
+    # ===== JOIN tizimi: /start chat_-1001234567890 =====
+    if context.args and context.args[0].startswith("chat_"):
+        try:
+            group_chat_id = int(context.args[0].replace("chat_", ""))
+        except ValueError:
+            group_chat_id = None
+
+        if group_chat_id and group_chat_id in games:
+            game = games[group_chat_id]
+            if game.state != "registration":
+                await update.message.reply_text("⛔ Ro'yxatga olish yopiq.")
+                return
+            if uid in game.players:
+                await update.message.reply_text(t(uid, "already_joined"))
+                return
+
+            first_name = update.effective_user.first_name
+            game.players[uid] = Player(uid, first_name)
+            player_count = len(game.players)
+            logger.info(f"User {uid} joined game in chat {group_chat_id} via start link (total: {player_count})")
+
+            # Foydalanuvchiga shaxsiy xabar
+            await update.message.reply_text(
+                f"✅ {first_name}, siz o'yinga qo'shildingiz!\n"
+                f"👥 Jami o'yinchilar: {player_count}\n\n"
+                f"🎭 O'yin boshlanishini kuting..."
+            )
+
+            # Guruh xabarini yangilash
+            names = "\n".join([f"• {p.name}" for p in game.players.values()])
+            new_text = (
+                f"📝 Ro'yxatdan o'tish boshlandi\n\n"
+                f"👥 O'yinchilar ({player_count}):\n{names}"
+            )
+            try:
+                bot_name = BOT_USERNAME or "bot"
+                join_url = f"https://t.me/{bot_name}?start=chat_{group_chat_id}"
+                await context.bot.edit_message_text(
+                    chat_id=group_chat_id,
+                    message_id=game.reg_msg_id,
+                    text=new_text,
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton(f"➕ Qo'shilish ({player_count})", url=join_url)
+                    ]])
+                )
+            except Exception as e:
+                logger.error(f"Error updating reg message: {e}")
+            return
+        else:
+            await update.message.reply_text("❌ O'yin topilmadi yoki tugagan.")
+            return
+
+    # ===== Oddiy /start — welcome xabari =====
     user_data = get_uid_data(uid)
     lang = user_data.get("lang", "uz")
 
@@ -914,7 +977,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = ("🎭 Advanced Secret Mafia Bot\n\n"
                 "📋 Команды:\n"
                 "/newgame - Начать игру\n"
-                "/join - Присоединиться\n"
                 "/lang - Сменить язык\n"
                 "/shop - Магазин\n"
                 "/balance - Баланс\n\n"
@@ -926,7 +988,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = ("🎭 Advanced Secret Mafia Bot\n\n"
                 "📋 Commands:\n"
                 "/newgame - Start game\n"
-                "/join - Join game\n"
                 "/lang - Change language\n"
                 "/shop - Shop\n"
                 "/balance - Check balance\n\n"
@@ -938,7 +999,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = ("🎭 Advanced Secret Mafia Bot\n\n"
                 "📋 Buyruqlar:\n"
                 "/newgame - O'yin boshlash\n"
-                "/join - O'yinga qo'shilish\n"
                 "/lang - Tilni o'zgartirish\n"
                 "/shop - Magazin\n"
                 "/balance - Balans\n\n"
@@ -1111,61 +1171,95 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     photo_blob = d.get("photo")
     if photo_blob:
         try:
-            await update.message.reply_photo(
-                photo=io.BytesIO(photo_blob),
-                caption=text,
-                parse_mode="HTML",
-                reply_markup=kb
-            )
-            return
+            # SQLite memoryview yoki bytes qaytarishi mumkin, ikkalasini ham handle qilamiz
+            if isinstance(photo_blob, memoryview):
+                photo_bytes = bytes(photo_blob)
+            elif isinstance(photo_blob, (bytes, bytearray)):
+                photo_bytes = bytes(photo_blob)
+            else:
+                photo_bytes = None
+
+            if photo_bytes and len(photo_bytes) > 0:
+                await update.message.reply_photo(
+                    photo=io.BytesIO(photo_bytes),
+                    caption=text,
+                    parse_mode="HTML",
+                    reply_markup=kb
+                )
+                return
         except Exception as e:
-            logger.error(f"Error sending profile photo from DB for {uid}: {e}")
-            # Fallback to text only if photo fails or message is missing
-            await safe_reply(update, context, text, parse_mode="HTML", reply_markup=kb)
-            return
+            logger.error(f"Error sending profile photo for {uid}: {e}")
+            # Rasm ishlamasa matn bilan davom etamiz
 
     # Rasmsiz profil
     await safe_reply(update, context, text, parse_mode="HTML", reply_markup=kb)
 
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Foydalanuvchi rasm yuborganda — /setphoto caption bo'lsa saqlash"""
+    """Foydalanuvchi rasm yuborganda saqlash:
+    1. Caption: /setphoto
+    2. /setphoto buyrug'iga reply qilib rasm yuborish
+    """
     if not update.message or not update.message.photo:
         return
 
-    caption = (update.message.caption or "").strip().lower()
     uid = update.effective_user.id
+    caption = (update.message.caption or "").strip().lower()
 
-    # Faqat /setphoto caption bilan yuborilgan rasmlarni qabul qilish
-    if caption not in ("/setphoto", "setphoto"):
+    # Usul 1: caption orqali — "/setphoto" yozib rasm yuborish
+    is_caption = caption in ("/setphoto", "setphoto")
+
+    # Usul 2: reply orqali — /setphoto ga reply qilib rasm yuborish
+    is_reply = False
+    if update.message.reply_to_message:
+        replied = update.message.reply_to_message
+        replied_text = (replied.text or replied.caption or "").strip().lower()
+        if replied_text in ("/setphoto", "setphoto"):
+            is_reply = True
+
+    if not is_caption and not is_reply:
         return
 
-    # Eng yuqori sifatli rasmni olish
+    # Faqat PRIVATE chatda qabul qilamiz
+    if update.effective_chat.type != "private":
+        bot_name = BOT_USERNAME or "bot"
+        await update.message.reply_text(
+            f"📸 Rasmni bot bilan shaxsiy chatda yuboring:\n"
+            f"👉 @{bot_name}"
+        )
+        return
+
     photo = update.message.photo[-1]
 
+    if photo.file_size and photo.file_size > 5 * 1024 * 1024:
+        await update.message.reply_text("❌ Rasm hajmi 5MB dan oshmasligi kerak.")
+        return
+
     try:
-        # Faylni yuklab olish va binary ko'rinishda saqlash
         f_info = await context.bot.get_file(photo.file_id)
-        photo_bytes = await f_info.download_as_bytearray()
-        
-        # Baza yangilash
+        photo_bytes = bytes(await f_info.download_as_bytearray())
+
+        DB.create_user(uid, update.effective_user.full_name, update.effective_user.username)
         DB.update_user(uid, photo=photo_bytes)
 
         user_data = get_uid_data(uid)
         lang_code = user_data.get("lang", "uz")
         if lang_code == "ru":
-            msg = "✅ Фото профиля обновлено! Используйте /profile для просмотра."
+            msg = "✅ Фото профиля обновлено!\n👉 /profile — посмотреть"
         elif lang_code == "en":
-            msg = "✅ Profile photo updated! Use /profile to view."
+            msg = "✅ Profile photo updated!\n👉 /profile — view"
         else:
-            msg = "✅ Profil rasmi yangilandi! Ko'rish uchun /profile."
+            msg = "✅ Profil rasmi yangilandi!\n👉 /profile — ko'rish"
 
-        await safe_reply(update, context, msg)
-        logger.info(f"User {uid} updated profile photo in Database.")
+        await update.message.reply_text(msg)
+        logger.info(f"User {uid} updated profile photo ({len(photo_bytes)} bytes)")
 
     except Exception as e:
-        logger.error(f"Error saving binary photo to DB for {uid}: {e}")
-        await update.message.reply_text("❌ Rasm saqlashda xato. Qayta urinib ko'ring.")
+        logger.error(f"Error saving photo for {uid}: {e}")
+        await update.message.reply_text(
+            "❌ Rasm saqlashda xato yuz berdi.\n"
+            "Qayta urinib ko'ring yoki kichikroq rasm yuboring."
+        )
 
 async def addadmin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -1241,23 +1335,23 @@ async def resetgame(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await safe_reply(update, context, "✅ O'yin tiklandi / Сброс выполнен / Game reset")
 
 async def join_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
+    """Eski /join command - endi start link orqali qo'shilish kerak"""
     uid = update.effective_user.id
-    first_name = update.effective_user.first_name
+    chat_id = update.effective_chat.id
+    
+    # Guruhda /join bosilsa, link yuborish
+    if chat_id < 0:  # guruh chat
+        game = games.get(chat_id)
+        if not game or game.state != "registration":
+            await safe_reply(update, context, "⛔ Hozir ro'yxatga olish yo'q.")
+            return
+        bot_name = BOT_USERNAME or "bot"
+        join_url = f"https://t.me/{bot_name}?start=chat_{chat_id}"
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("🎮 Qo'shilish", url=join_url)]])
+        await safe_reply(update, context, "👇 Qo'shilish uchun tugmani bosing:", reply_markup=kb)
+    else:
+        await safe_reply(update, context, "ℹ️ Guruh chatida /newgame buyrug'ini ishlating.")
 
-    game = games.get(chat_id)
-    if not game:
-        await safe_reply(update, context, "❌ O'yin yo'q. /newgame")
-        return
-    if game.state != "registration":
-        await safe_reply(update, context, "⛔ Ro'yxatga olish yopiq.")
-        return
-    if uid in game.players:
-        await safe_reply(update, context, t(uid, "already_joined"))
-        return
-
-    game.players[uid] = Player(uid, first_name)
-    await safe_reply(update, context, f"✅ {first_name} qo'shildi! Jami: {len(game.players)}")
 
 async def newgame(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
@@ -1280,16 +1374,41 @@ async def newgame(update: Update, context: ContextTypes.DEFAULT_TYPE):
     games[chat_id] = game
     logger.info(f"New game started in chat {chat_id} by user {uid}")
 
+    # Bot username olish
+    bot_name = BOT_USERNAME
+    if not bot_name:
+        try:
+            bot_info = await context.bot.get_me()
+            bot_name = bot_info.username
+        except:
+            bot_name = "bot"
+
+    join_url = f"https://t.me/{bot_name}?start=chat_{chat_id}"
+
+    reg_text = (
+        f"🎭 <b>Mafia O'yini boshlandi!</b>\n\n"
+        f"📝 Ro'yxatdan o'tish davom etmoqda\n"
+        f"👥 O'yinchilar: 0\n\n"
+        f"⏱ {REGISTRATION_TIME} soniya\n"
+        f"✅ Qo'shilish uchun tugmani bosing!"
+    )
+
     try:
         msg = await update.message.reply_text(
-            t(uid, "reg_started"),
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Qo'shilish / Join", callback_data="join")]])
+            reg_text,
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🎮 Qo'shilish / Join", url=join_url)
+            ]])
         )
     except Exception:
         msg = await context.bot.send_message(
             chat_id,
-            t(uid, "reg_started"),
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Qo'shilish / Join", callback_data="join")]])
+            reg_text,
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🎮 Qo'shilish / Join", url=join_url)
+            ]])
         )
     game.reg_msg_id = msg.message_id
     try:
@@ -1440,11 +1559,20 @@ async def process_night_actions(context, chat_id: int):
     game.state = "day"
     game.private_votes.clear()
     
-    # Robust UID selection for translation
     alive_ids = [p.id for p in game.players.values() if p.alive]
     uid = alive_ids[0] if alive_ids else (list(game.players.keys())[0] if game.players else 0)
-    
-    await safe_send_photo(context, chat_id, DAY_IMAGE_URL, t(uid, "day"))
+
+    alive_names = "\n".join([f"• {p.name}" for p in game.players.values() if p.alive])
+    day_text = (
+        f"☀️ <b>Kunduz boshlandi!</b>\n\n"
+        f"👥 Tirik o'yinchilar ({len(alive_ids)}):\n{alive_names}\n\n"
+        f"💬 Muhokama qiling! {DAY_DURATION} soniya..."
+    )
+
+    try:
+        await context.bot.send_message(chat_id, day_text, parse_mode="HTML")
+    except:
+        await safe_send_photo(context, chat_id, DAY_IMAGE_URL, t(uid, "day"))
 
     await asyncio.sleep(DAY_DURATION)
 
@@ -1452,7 +1580,7 @@ async def process_night_actions(context, chat_id: int):
         await start_voting(context, chat_id)
 
 async def start_voting(context, chat_id: int):
-    """Ovoz berish boshlash"""
+    """Ovoz berish boshlash - shaxsiy chatlarda"""
     game = games.get(chat_id)
     if not game:
         return
@@ -1462,13 +1590,28 @@ async def start_voting(context, chat_id: int):
     game.private_votes.clear()
 
     alive = [p for p in game.players.values() if p.alive]
+
+    # Guruhga e'lon
+    try:
+        await context.bot.send_message(
+            chat_id,
+            f"🗳️ <b>Ovoz berish boshlandi!</b>\n\n"
+            f"👇 Shaxsiy chatda kimni ayblamoqchiligingizni tanlang!\n"
+            f"⏱ {VOTING_DURATION} soniya",
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        logger.error(f"Error sending voting announcement: {e}")
+
+    # Har bir o'yinchiga SHAXSIY CHATDA tugmalar yuborish
     for p in alive:
         kb = [[InlineKeyboardButton(f"🗳️ {x.name}", callback_data=f"vote_{x.id}")]
               for x in alive if x.id != p.id]
         try:
             await context.bot.send_message(
                 p.id,
-                "🗳️ " + t(p.id, "voting_start"),
+                f"🗳️ <b>Kim aybdor?</b>\n\nBir kishini tanlang:",
+                parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(kb)
             )
         except Exception as e:
@@ -1480,47 +1623,84 @@ async def start_voting(context, chat_id: int):
         await finish_voting(context, chat_id)
 
 async def finish_voting(context, chat_id: int):
-    """Ovoz berish natijasini ko'rish"""
+    """Ovoz berish natijasini ko'rish va final ovozga o'tish"""
     game = games.get(chat_id)
     if not game:
         return
 
     alive_ids = [p.id for p in game.players.values() if p.alive]
-    # BUG FIX #6: t() uchun haqiqiy uid ishlatish (uid=1 emas)
     uid = alive_ids[0] if alive_ids else 0
 
     if not game.private_votes:
         try:
-            await context.bot.send_message(chat_id, "❌ " + t(uid, "no_votes"))
+            await context.bot.send_message(chat_id, "❌ Hech kim ovoz bermadi. O'yin davom etadi.")
         except Exception as e:
             logger.error(f"Error sending no votes msg: {e}")
-        # Ovoz berilmasa keyingi rund
         if chat_id in games:
             await start_game(context, chat_id)
         return
 
+    # Eng ko'p ovoz olgan kishini topish
     votes = game.private_votes
-    target = max(set(votes.values()), key=list(votes.values()).count)
+    vote_count: Dict[int, int] = {}
+    for v in votes.values():
+        vote_count[v] = vote_count.get(v, 0) + 1
+    target = max(vote_count, key=vote_count.get)
 
     if target not in game.players:
         await start_game(context, chat_id)
         return
 
-    kb = [[
-        InlineKeyboardButton(f"👍 {t(uid, 'hang')}", callback_data=f"like_{target}"),
-        InlineKeyboardButton(f"👎 {t(uid, 'save')}", callback_data=f"dislike_{target}")
-    ]]
+    target_name = game.players[target].name
+    target_vote_count = vote_count[target]
+    total_voters = len(votes)
+
+    # game holatini yangilash
+    game.state = "final_vote"
+    game.public_votes = {"like": set(), "dislike": set()}
+    # Ayblanuvchini game ichida saqlash
+    game._accused_target = target
+
+    # Guruhda ovoz xabari — InlineKeyboard bilan
+    # Faqat ovoz SONI ko'rinadi, kimning ovozi emas
+    alive_count = len(alive_ids)
+    hang_count = 0
+    save_count = 0
+
+    group_text = (
+        f"⚖️ <b>AYBLOV!</b>\n\n"
+        f"👤 Ayblanuvchi: <b>{target_name}</b>\n"
+        f"🗳️ Unga qarshi ovozlar: <b>{target_vote_count}/{total_voters}</b>\n\n"
+        f"👍 Osish: <b>{hang_count}</b>  |  👎 Saqlash: <b>{save_count}</b>\n\n"
+        f"⏱ Ovoz bering!"
+    )
+
+    kb = InlineKeyboardMarkup([[
+        InlineKeyboardButton(f"👍 Osish ({hang_count})", callback_data=f"fvote_h_{target}_{chat_id}"),
+        InlineKeyboardButton(f"👎 Saqlash ({save_count})", callback_data=f"fvote_s_{target}_{chat_id}")
+    ]])
 
     try:
-        await context.bot.send_message(
-            game.chat_id,
-            t(uid, "accused").format(game.players[target].name),
-            reply_markup=InlineKeyboardMarkup(kb)
+        vote_msg = await context.bot.send_message(
+            chat_id, group_text, parse_mode="HTML", reply_markup=kb
         )
+        # Xabar ID ni saqlaymiz — keyinchalik yangilash uchun
+        game._vote_msg_id = vote_msg.message_id
     except Exception as e:
-        logger.error(f"Error sending accused message: {e}")
+        logger.error(f"Error sending final vote message: {e}")
+        game._vote_msg_id = None
 
-    game.state = "final_vote"
+    # Ayblanuvchiga shaxsiy xabar
+    try:
+        await context.bot.send_message(
+            target,
+            f"⚖️ <b>Siz ayblanmoqdasiz!</b>\n\n"
+            f"👥 O'yinchilar osish yoki saqlash haqida ovoz bermoqda...\n"
+            f"Natijani guruhda kuting.",
+            parse_mode="HTML"
+        )
+    except:
+        pass
 
 async def end_game(context, chat_id: int, winner: str):
     """O'yinni tugatish"""
@@ -1532,13 +1712,15 @@ async def end_game(context, chat_id: int, winner: str):
 
     if winner == "mafia":
         winner_ids = [p.id for p in game.players.values() if p.role in ("mafia", "don")]
+        winner_label = "🔴 MAFIA"
     else:
         winner_ids = [p.id for p in game.players.values() if p.role not in ("mafia", "don")]
+        winner_label = "🟢 SHAHAR"
 
     # Statistika yangilash
     for p in game.players.values():
         d = get_uid_data(p.id)
-        DB.update_user(p.id, 
+        DB.update_user(p.id,
             games_played=d.get("games_played", 0) + 1,
             last_played=datetime.now().isoformat()
         )
@@ -1550,14 +1732,44 @@ async def end_game(context, chat_id: int, winner: str):
             games_won=d.get("games_won", 0) + 1
         )
 
+    # Barcha rollarni guruhda ochish
+    role_emoji = {
+        "don":     "👔 DON",
+        "mafia":   "🔪 MAFIA",
+        "doctor":  "💚 DOCTOR",
+        "killer":  "🔎 KILLER",
+        "citizen": "👤 FUQARO",
+    }
+    roles_text = ""
+    for p in game.players.values():
+        r = role_emoji.get(p.role, p.role.upper() if p.role else "?")
+        alive_icon = "✅" if p.alive else "💀"
+        roles_text += f"{alive_icon} {p.name} — <b>{r}</b>\n"
+
     uid = list(game.players.keys())[0]
+    result_text = (
+        f"🏁 <b>O'YIN TUGADI!</b>\n\n"
+        f"🏆 G'olib: <b>{winner_label}</b>\n"
+        f"💰 Mukofot: <b>{WIN_REWARD} coin</b>\n\n"
+        f"📋 <b>Rollar:</b>\n{roles_text}"
+    )
+
     try:
-        await context.bot.send_message(
-            chat_id,
-            t(uid, "game_end").format(winner.upper(), len(winner_ids), WIN_REWARD)
-        )
+        await context.bot.send_message(chat_id, result_text, parse_mode="HTML")
     except Exception as e:
         logger.error(f"Error sending game end message: {e}")
+
+    # Har bir o'yinchiga shaxsiy xabar
+    for p in game.players.values():
+        won = p.id in winner_ids
+        try:
+            if won:
+                personal = f"🎉 Tabriklaymiz! Siz <b>G'OLIB</b>siz!\n💰 +{WIN_REWARD} coin qo'shildi!"
+            else:
+                personal = f"😔 Siz yutqazdingiz. Keyingi o'yinda omad!\n\n🎭 Sizning rolingiz: <b>{role_emoji.get(p.role, '?')}</b>"
+            await context.bot.send_message(p.id, personal, parse_mode="HTML")
+        except:
+            pass
 
     if chat_id in games:
         del games[chat_id]
@@ -1582,7 +1794,7 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.answer(msg, show_alert=True)
 
     # Til o'zgartirish
-    if q.data.startswith("lang_"):
+    elif q.data.startswith("lang_"):
         lang_code = q.data.split("_")[1]
         DB.update_user(uid, lang=lang_code)
         await q.edit_message_text(t(uid, "lang_set"))
@@ -1612,36 +1824,6 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.edit_message_text("🛑 " + t(uid, "game_stopped"))
         else:
             await q.answer(t(uid, "game_not_found"), show_alert=True)
-
-    # O'yinga qo'shilish
-    elif q.data == "join":
-        game = games.get(q.message.chat.id)
-        if not game or game.state != "registration":
-            await q.answer("⛔ Ro'yxatga olish yopiq.", show_alert=True)
-            return
-        if uid in game.players:
-            await q.answer(t(uid, "already_joined"), show_alert=True)
-            return
-        game.players[uid] = Player(uid, q.from_user.first_name)
-        logger.info(f"User {uid} joined game in chat {game.chat_id} (total: {len(game.players)})")
-        await q.answer(t(uid, "joined"))
-
-        # Guruhda ko'rinadigan: registration xabarini yangilash
-        player_count = len(game.players)
-        names = "\n".join([f"• {p.name}" for p in game.players.values()])
-        new_text = (
-            f"📝 Ro'yxatdan o'tish boshlandi\n\n"
-            f"👥 O'yinchilar ({player_count}):\n{names}"
-        )
-        try:
-            await q.edit_message_text(
-                new_text,
-                reply_markup=InlineKeyboardMarkup(
-                    [[InlineKeyboardButton(f"➕ Qo'shilish ({player_count})", callback_data="join")]]
-                )
-            )
-        except Exception:
-            pass
 
     # Shaxsiy ovoz
     elif q.data.startswith("vote_"):
@@ -1703,38 +1885,133 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     await q.answer("⚠️ Siz allaqachon tekshirdingiz", show_alert=True)
 
-    # Osish ovozi
-    elif q.data.startswith("like_"):
-        game = next((g for g in games.values() if g.state == "final_vote"), None)
-        if not game:
-            return
-        target = int(q.data.split("_")[1])
-        if uid in game.public_votes["like"] or uid in game.public_votes["dislike"]:
-            await q.answer("⚠️ Siz allaqachon ovoz bergansiz", show_alert=True)
-            return
-        game.public_votes["like"].add(uid)
-        alive_count = len([p for p in game.players.values() if p.alive])
-        if len(game.public_votes["like"]) + len(game.public_votes["dislike"]) >= alive_count:
-            if target in game.players:
-                game.players[target].alive = False
-                uid2 = list(game.players.keys())[0]
-                asyncio.create_task(
-                    context.bot.send_message(game.chat_id, t(uid2, "hung").format(game.players[target].name))
-                )
-            asyncio.create_task(start_game(context, game.chat_id))
+    # === GURUH FINAL OVOZ: osish/saqlash ===
+    elif q.data.startswith("fvote_h_") or q.data.startswith("fvote_s_"):
+        # format: fvote_h_{target}_{chat_id}  yoki  fvote_s_{target}_{chat_id}
+        parts = q.data.split("_", 4)
+        # ['fvote', 'h'|'s', target, chat_id_possibly_negative]
+        action = parts[1]  # 'h' = hang, 's' = save
+        target = int(parts[2])
+        group_chat_id = int(parts[3])
 
-    # Saqlash ovozi
-    elif q.data.startswith("dislike_"):
-        game = next((g for g in games.values() if g.state == "final_vote"), None)
-        if not game:
+        game = games.get(group_chat_id)
+        if not game or game.state != "final_vote":
+            await q.answer("⏰ Ovoz berish tugadi.", show_alert=True)
             return
+
+        # Foydalanuvchi o'yinda va tirik bo'lishi kerak
+        if uid not in game.players or not game.players[uid].alive:
+            await q.answer("❌ Siz ovoz bera olmaysiz.", show_alert=True)
+            return
+
+        # Ayblanuvchi o'zi ovoz bera olmaydi
+        if uid == target:
+            await q.answer("❌ O'zingizga ovoz bera olmaysiz!", show_alert=True)
+            return
+
+        # Allaqachon ovoz berganmi?
         if uid in game.public_votes["like"] or uid in game.public_votes["dislike"]:
-            await q.answer("⚠️ Siz allaqachon ovoz bergansiz", show_alert=True)
+            await q.answer("⚠️ Siz allaqachon ovoz bergansiz!", show_alert=True)
             return
-        game.public_votes["dislike"].add(uid)
-        alive_count = len([p for p in game.players.values() if p.alive])
-        if len(game.public_votes["like"]) + len(game.public_votes["dislike"]) >= alive_count:
-            asyncio.create_task(start_game(context, game.chat_id))
+
+        # Ovozni qo'shish
+        if action == "h":
+            game.public_votes["like"].add(uid)
+            await q.answer("✅ Osish uchun ovoz berdingiz", show_alert=False)
+        else:
+            game.public_votes["dislike"].add(uid)
+            await q.answer("✅ Saqlash uchun ovoz berdingiz", show_alert=False)
+
+        hang_count = len(game.public_votes["like"])
+        save_count = len(game.public_votes["dislike"])
+        total_votes = hang_count + save_count
+
+        target_name = game.players[target].name if target in game.players else "?"
+
+        # Guruh xabarini YANGILASH — faqat sonlar ko'rinadi, kimning ovozi emas
+        alive_voters = [p for p in game.players.values() if p.alive and p.id != target]
+        remaining = len(alive_voters) - total_votes
+
+        updated_text = (
+            f"⚖️ <b>AYBLOV!</b>\n\n"
+            f"👤 Ayblanuvchi: <b>{target_name}</b>\n\n"
+            f"👍 Osish: <b>{hang_count}</b>  |  👎 Saqlash: <b>{save_count}</b>\n"
+            f"📊 Jami: {total_votes}/{len(alive_voters)} ovoz\n"
+            + (f"⏳ {remaining} ta ovoz kutilmoqda..." if remaining > 0 else "✅ Barcha ovoz berildi!")
+        )
+
+        new_kb = InlineKeyboardMarkup([[
+            InlineKeyboardButton(f"👍 Osish ({hang_count})", callback_data=f"fvote_h_{target}_{group_chat_id}"),
+            InlineKeyboardButton(f"👎 Saqlash ({save_count})", callback_data=f"fvote_s_{target}_{group_chat_id}")
+        ]])
+
+        try:
+            await q.edit_message_text(updated_text, parse_mode="HTML", reply_markup=new_kb)
+        except Exception as e:
+            logger.error(f"Error updating vote message: {e}")
+
+        # Barcha tirik o'yinchilar (ayblanuvchidan tashqari) ovoz berdimi?
+        if total_votes >= len(alive_voters):
+            # Tugmalarni o'chirish
+            final_text = (
+                f"⚖️ <b>OVOZ TUGADI!</b>\n\n"
+                f"👤 Ayblanuvchi: <b>{target_name}</b>\n\n"
+                f"👍 Osish: <b>{hang_count}</b>  |  👎 Saqlash: <b>{save_count}</b>"
+            )
+            try:
+                await q.edit_message_text(final_text, parse_mode="HTML")
+            except:
+                pass
+
+            if hang_count > save_count:
+                # ✅ OSISH
+                if target in game.players:
+                    game.players[target].alive = False
+                    hung_name = game.players[target].name
+                    hung_role = game.players[target].role
+                    role_emoji_map = {
+                        "don": "👔 DON", "mafia": "🔪 MAFIA",
+                        "doctor": "💚 DOCTOR", "killer": "🔎 KILLER", "citizen": "👤 FUQARO"
+                    }
+                    r_label = role_emoji_map.get(hung_role, "?")
+                    asyncio.create_task(
+                        context.bot.send_message(
+                            group_chat_id,
+                            f"🪤 <b>{hung_name}</b> osib o'ldirildi!\n"
+                            f"🎭 Uning roli: <b>{r_label}</b>",
+                            parse_mode="HTML"
+                        )
+                    )
+                    try:
+                        await context.bot.send_message(
+                            target,
+                            f"💀 Siz osib o'ldirildigiz!\n"
+                            f"👍 Osish: {hang_count} | 👎 Saqlash: {save_count}"
+                        )
+                    except:
+                        pass
+            elif save_count >= hang_count:
+                # 🛡️ SAQLASH (teng bo'lsa ham saqlash)
+                if target in game.players:
+                    saved_name = game.players[target].name
+                    asyncio.create_task(
+                        context.bot.send_message(
+                            group_chat_id,
+                            f"🛡️ <b>{saved_name}</b> saqlab qolindi!\n"
+                            f"👍 Osish: {hang_count} | 👎 Saqlash: {save_count}",
+                            parse_mode="HTML"
+                        )
+                    )
+                    try:
+                        await context.bot.send_message(
+                            target,
+                            f"🎉 Siz saqlab qolindingiz!\n"
+                            f"👍 Osish: {hang_count} | 👎 Saqlash: {save_count}"
+                        )
+                    except:
+                        pass
+
+            asyncio.create_task(start_game(context, group_chat_id))
 
     # BUG FIX #1: "buy_active_role" uchun to'liq key
     elif q.data.startswith("buy_"):
@@ -1796,6 +2073,10 @@ def main():
 
     # ================== BOT KOMANDALAR MENYUSI ==================
     async def post_init(application):
+        global BOT_USERNAME
+        bot_info = await application.bot.get_me()
+        BOT_USERNAME = bot_info.username
+        logger.info(f"Bot username: @{BOT_USERNAME}")
         await application.bot.set_my_commands([
             ("start",      "🎭 Botni ishga tushirish"),
             ("newgame",    "🎮 Yangi o'yin boshlash"),
@@ -1829,8 +2110,9 @@ def main():
     app.add_handler(CommandHandler("removeadmin", removeadmin))
     app.add_handler(CommandHandler("listadmins", listadmins))
     app.add_handler(CallbackQueryHandler(callbacks))
-    # Rasm handler — /setphoto caption bilan (shaxsiy va guruh)
-    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    # Rasm handler — /setphoto caption bilan (private + guruh)
+    app.add_handler(MessageHandler(filters.PHOTO & filters.ChatType.PRIVATE, handle_photo))
+    app.add_handler(MessageHandler(filters.PHOTO & filters.ChatType.GROUPS, handle_photo))
     app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.GROUPS, chat_guard))
 
     logger.info("Bot ishga tushdi!")
