@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 
 import os
 from dotenv import load_dotenv
+import admin as adm
 
 load_dotenv()
 
@@ -135,8 +136,138 @@ class DatabaseManager:
                     uid INTEGER PRIMARY KEY
                 );
             """)
+        # Ban va warn jadvallari
+        if self.is_pg:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS bans (
+                    uid BIGINT PRIMARY KEY,
+                    reason TEXT,
+                    banned_by BIGINT,
+                    banned_at TEXT
+                );
+                CREATE TABLE IF NOT EXISTS warns (
+                    id SERIAL PRIMARY KEY,
+                    uid BIGINT,
+                    reason TEXT,
+                    warned_by BIGINT,
+                    warned_at TEXT
+                );
+            """)
+        else:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS bans (
+                    uid INTEGER PRIMARY KEY,
+                    reason TEXT,
+                    banned_by INTEGER,
+                    banned_at TEXT
+                );
+                CREATE TABLE IF NOT EXISTS warns (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    uid INTEGER,
+                    reason TEXT,
+                    warned_by INTEGER,
+                    warned_at TEXT
+                );
+            """)
         conn.commit()
         conn.close()
+
+    # ── BAN ──
+    def ban_user(self, uid: int, reason: str, banned_by: int):
+        from datetime import datetime
+        conn = self._get_conn(); cur = conn.cursor()
+        q = "INSERT INTO bans (uid, reason, banned_by, banned_at) VALUES (%s,%s,%s,%s) ON CONFLICT (uid) DO UPDATE SET reason=%s, banned_by=%s, banned_at=%s" if self.is_pg else \
+            "INSERT OR REPLACE INTO bans (uid, reason, banned_by, banned_at) VALUES (?,?,?,?)"
+        now = datetime.now().isoformat()
+        if self.is_pg:
+            cur.execute(q, (uid, reason, banned_by, now, reason, banned_by, now))
+        else:
+            cur.execute(q, (uid, reason, banned_by, now))
+        conn.commit(); conn.close()
+
+    def unban_user(self, uid: int):
+        conn = self._get_conn(); cur = conn.cursor()
+        cur.execute("DELETE FROM bans WHERE uid = %s" if self.is_pg else "DELETE FROM bans WHERE uid = ?", (uid,))
+        conn.commit(); conn.close()
+
+    def is_banned(self, uid: int) -> Optional[dict]:
+        conn = self._get_conn()
+        cur = conn.cursor(cursor_factory=RealDictCursor) if self.is_pg else conn.cursor()
+        cur.execute("SELECT * FROM bans WHERE uid = %s" if self.is_pg else "SELECT * FROM bans WHERE uid = ?", (uid,))
+        row = cur.fetchone(); conn.close()
+        return dict(row) if row else None
+
+    def get_all_bans(self) -> list:
+        conn = self._get_conn()
+        cur = conn.cursor(cursor_factory=RealDictCursor) if self.is_pg else conn.cursor()
+        cur.execute("SELECT * FROM bans ORDER BY banned_at DESC")
+        rows = cur.fetchall(); conn.close()
+        return [dict(r) for r in rows]
+
+    # ── WARN ──
+    def warn_user(self, uid: int, reason: str, warned_by: int) -> int:
+        """Warn qo'shadi, jami warn sonini qaytaradi"""
+        from datetime import datetime
+        conn = self._get_conn(); cur = conn.cursor()
+        now = datetime.now().isoformat()
+        cur.execute(
+            "INSERT INTO warns (uid, reason, warned_by, warned_at) VALUES (%s,%s,%s,%s)" if self.is_pg else
+            "INSERT INTO warns (uid, reason, warned_by, warned_at) VALUES (?,?,?,?)",
+            (uid, reason, warned_by, now)
+        )
+        conn.commit()
+        cur.execute("SELECT COUNT(*) FROM warns WHERE uid = %s" if self.is_pg else "SELECT COUNT(*) FROM warns WHERE uid = ?", (uid,))
+        count = cur.fetchone()[0]; conn.close()
+        return count
+
+    def get_warns(self, uid: int) -> list:
+        conn = self._get_conn()
+        cur = conn.cursor(cursor_factory=RealDictCursor) if self.is_pg else conn.cursor()
+        cur.execute("SELECT * FROM warns WHERE uid = %s ORDER BY warned_at DESC" if self.is_pg else
+                    "SELECT * FROM warns WHERE uid = ? ORDER BY warned_at DESC", (uid,))
+        rows = cur.fetchall(); conn.close()
+        return [dict(r) for r in rows]
+
+    def clear_warns(self, uid: int):
+        conn = self._get_conn(); cur = conn.cursor()
+        cur.execute("DELETE FROM warns WHERE uid = %s" if self.is_pg else "DELETE FROM warns WHERE uid = ?", (uid,))
+        conn.commit(); conn.close()
+
+    # ── STATS ──
+    def get_total_users(self) -> int:
+        conn = self._get_conn(); cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM users")
+        count = cur.fetchone()[0]; conn.close()
+        return count
+
+    def get_top_players(self, limit: int = 10) -> list:
+        conn = self._get_conn()
+        cur = conn.cursor(cursor_factory=RealDictCursor) if self.is_pg else conn.cursor()
+        cur.execute(
+            "SELECT uid, name, username, games_played, games_won, money FROM users ORDER BY games_won DESC LIMIT %s" if self.is_pg else
+            "SELECT uid, name, username, games_played, games_won, money FROM users ORDER BY games_won DESC LIMIT ?",
+            (limit,)
+        )
+        rows = cur.fetchall(); conn.close()
+        return [dict(r) for r in rows]
+
+    def search_user(self, query: str) -> list:
+        conn = self._get_conn()
+        cur = conn.cursor(cursor_factory=RealDictCursor) if self.is_pg else conn.cursor()
+        like = f"%{query}%"
+        cur.execute(
+            "SELECT uid, name, username, money, games_played, games_won FROM users WHERE name ILIKE %s OR username ILIKE %s LIMIT 10" if self.is_pg else
+            "SELECT uid, name, username, money, games_played, games_won FROM users WHERE name LIKE ? OR username LIKE ? LIMIT 10",
+            (like, like)
+        )
+        rows = cur.fetchall(); conn.close()
+        return [dict(r) for r in rows]
+
+    def get_all_uids(self) -> list:
+        conn = self._get_conn(); cur = conn.cursor()
+        cur.execute("SELECT uid FROM users")
+        rows = cur.fetchall(); conn.close()
+        return [row[0] for row in rows]
 
     def get_user(self, uid: int) -> Optional[dict]:
         # Cache dan qaytarish
@@ -852,7 +983,7 @@ async def is_bot_admin(context, chat_id: int) -> bool:
         return False
 
 def is_user_admin(uid: int) -> bool:
-    return uid in ADMINS
+    return adm.is_user_admin(uid)
 
 def validate_game_state(chat_id: int) -> Optional[str]:
     if len(games) >= MAX_GAMES:
@@ -999,6 +1130,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ===== JOIN tizimi: /start chat_-1001234567890 =====
     if context.args and context.args[0].startswith("chat_"):
+        # Ban tekshiruvi
+        ban_info = DB.is_banned(uid)
+        if ban_info:
+            await update.message.reply_text(
+                f"🚫 Siz botdan ban qilingansiz!\n"
+                f"📋 Sabab: {ban_info.get('reason', 'Ko\'rsatilmagan')}"
+            )
+            return
         raw = context.args[0].replace("chat_", "", 1)
         try:
             group_chat_id = int(raw)
@@ -1149,38 +1288,6 @@ async def shop(update: Update, context: ContextTypes.DEFAULT_TYPE):
         shop_text += f"  {item_data['desc']}\n\n"
 
     await safe_reply(update, context, shop_text, reply_markup=InlineKeyboardMarkup(kb))
-
-async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    if check_cooldown(uid):
-        await safe_reply(update, context, cooldown_msg(uid))
-        return
-    if not is_user_admin(uid):
-        await safe_reply(update, context, t(uid, "not_admin"))
-        return
-    kb = [
-        [InlineKeyboardButton("👥 " + t(uid, "admins_list"), callback_data="list_admins")],
-        [InlineKeyboardButton("🛑 " + t(uid, "stop_game"), callback_data="admin_stop_game")],
-    ]
-    await safe_reply(update, context, t(uid, "admin_panel"), reply_markup=InlineKeyboardMarkup(kb))
-
-async def stopgame(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    chat_id = update.effective_chat.id
-    if check_cooldown(uid):
-        await safe_reply(update, context, cooldown_msg(uid))
-        return
-    if not is_user_admin(uid):
-        await safe_reply(update, context, t(uid, "not_admin"))
-        return
-    if chat_id not in games:
-        await safe_reply(update, context, t(uid, "game_not_found"))
-        return
-    games[chat_id].state = "stopped"
-    del games[chat_id]
-    session_remove(chat_id)
-    logger.info(f"Admin {uid} stopped game in chat {chat_id}")
-    await update.message.reply_text("🛑 " + t(uid, "game_stopped"))
 
 async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Profil ko'rsatish"""
@@ -1351,80 +1458,6 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Qayta urinib ko'ring yoki kichikroq rasm yuboring."
         )
 
-async def addadmin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    if not is_user_admin(uid):
-        await safe_reply(update, context, t(uid, "not_admin"))
-        return
-    if not context.args:
-        await safe_reply(update, context, "❓ Ishlatish: /addadmin <user_id>")
-        return
-    try:
-        new_admin_id = int(context.args[0])
-    except ValueError:
-        await safe_reply(update, context, "❌ ID raqam bo'lishi kerak")
-        return
-    if new_admin_id in ADMINS:
-        await safe_reply(update, context, f"⚠️ {new_admin_id} allaqachon admin")
-        return
-    ADMINS.add(new_admin_id)
-    DB.add_admin(new_admin_id)
-    logger.info(f"Admin {uid} added new admin: {new_admin_id}")
-    await safe_reply(update, context, f"✅ {new_admin_id} admin qilindi!\n👥 Jami adminlar: {len(ADMINS)}")
-
-async def removeadmin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    if not is_user_admin(uid):
-        await update.message.reply_text(t(uid, "not_admin"))
-        return
-    if not context.args:
-        await update.message.reply_text("❓ Ishlatish: /removeadmin <user_id>")
-        return
-    try:
-        rem_id = int(context.args[0])
-    except ValueError:
-        await update.message.reply_text("❌ ID raqam bo'lishi kerak")
-        return
-    if rem_id == ADMIN_ID:
-        await update.message.reply_text("❌ Asosiy adminni o'chirib bo'lmaydi")
-        return
-    if rem_id not in ADMINS:
-        await update.message.reply_text(f"⚠️ {rem_id} admin emas")
-        return
-    ADMINS.discard(rem_id)
-    DB.remove_admin(rem_id)
-    logger.info(f"Admin {uid} removed admin: {rem_id}")
-    await update.message.reply_text(f"✅ {rem_id} admin ro'yxatidan olib tashlandi")
-
-async def listadmins(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    if not is_user_admin(uid):
-        await safe_reply(update, context, t(uid, "not_admin"))
-        return
-    if not ADMINS:
-        await safe_reply(update, context, "👥 Adminlar yo'q")
-        return
-    lines = []
-    for a in ADMINS:
-        tag = " 👑 (asosiy)" if a == ADMIN_ID else ""
-        lines.append(f"• {a}{tag}")
-    await safe_reply(update, context, f"👨‍💼 Adminlar ro'yxati ({len(ADMINS)}):\n\n" + "\n".join(lines))
-
-async def resetgame(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    chat_id = update.effective_chat.id
-    if check_cooldown(uid):
-        await safe_reply(update, context, cooldown_msg(uid))
-        return
-    if not is_user_admin(uid):
-        await safe_reply(update, context, t(uid, "not_admin"))
-        return
-    if chat_id in games:
-        games[chat_id].state = "stopped"
-        del games[chat_id]
-        session_remove(chat_id)
-    await safe_reply(update, context, "✅ O'yin tiklandi / Сброс выполнен / Game reset")
-
 async def join_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Eski /join command - endi start link orqali qo'shilish kerak"""
     uid = update.effective_user.id
@@ -1587,7 +1620,7 @@ async def start_game(context, chat_id: int):
     asyncio.create_task(_night_timer(context, chat_id))
 
 async def _night_timer(context, chat_id: int):
-    await asyncio.sleep(NIGHT_DURATION)
+    await asyncio.sleep(NIGHT_DURATION * adm.get_speed(chat_id))
     if chat_id in games and games[chat_id].state == "night":
         await process_night_actions(context, chat_id)
 
@@ -1688,7 +1721,7 @@ async def process_night_actions(context, chat_id: int):
     asyncio.create_task(_day_timer(context, chat_id))
 
 async def _day_timer(context, chat_id: int):
-    await asyncio.sleep(DAY_DURATION)
+    await asyncio.sleep(DAY_DURATION * adm.get_speed(chat_id))
     if chat_id in games and games[chat_id].state == "day":
         await start_voting(context, chat_id)
 
@@ -1733,7 +1766,7 @@ async def start_voting(context, chat_id: int):
     asyncio.create_task(_voting_timer(context, chat_id))
 
 async def _voting_timer(context, chat_id: int):
-    await asyncio.sleep(VOTING_DURATION)
+    await asyncio.sleep(VOTING_DURATION * adm.get_speed(chat_id))
     if chat_id in games and games[chat_id].state == "voting":
         await finish_voting(context, chat_id)
 
@@ -1930,34 +1963,9 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await safe_answer(t(uid, "lang_set"))
         await safe_edit(t(uid, "lang_set"))
 
-    # Admin: adminlar ro'yxati
-    elif q.data == "list_admins":
-        if not is_user_admin(uid):
-            await safe_answer(t(uid, "not_admin"), alert=True)
-            return
-        lines = []
-        for a in ADMINS:
-            tag = " 👑" if a == ADMIN_ID else ""
-            lines.append(f"• {a}{tag}")
-        text = f"👨‍💼 Adminlar ({len(ADMINS)}):\n\n" + "\n".join(lines)
-        text += "\n\n➕ Admin qo'shish: /addadmin <id>\n➖ O'chirish: /removeadmin <id>"
-        await safe_answer()
-        await safe_edit(text)
-
-    # Admin: o'yinni to'xtatish
-    elif q.data == "admin_stop_game":
-        if not is_user_admin(uid):
-            await safe_answer(t(uid, "not_admin"), alert=True)
-            return
-        chat_id = q.message.chat.id
-        if chat_id in games:
-            games[chat_id].state = "stopped"
-            del games[chat_id]
-            session_remove(chat_id)
-            await safe_answer()
-            await safe_edit("🛑 " + t(uid, "game_stopped"))
-        else:
-            await safe_answer(t(uid, "game_not_found"), alert=True)
+    # Admin callbacklari (admin.py ga yo'naltiriladi)
+    if await adm.handle_admin_callback(q, uid, safe_answer, safe_edit):
+        return
 
     # Shaxsiy ovoz (kunduz muhokamada)
     elif q.data.startswith("vote_") and not q.data.startswith("fvote_"):
@@ -2234,20 +2242,52 @@ def main():
         bot_info = await application.bot.get_me()
         BOT_USERNAME = bot_info.username
         logger.info(f"Bot username: @{BOT_USERNAME}")
+
+        # Admin modulini sozlash
+        adm.setup(
+            DB=DB,
+            ADMIN_ID=ADMIN_ID,
+            ADMINS=ADMINS,
+            games=games,
+            session_remove=session_remove,
+            t=t,
+            safe_reply=safe_reply,
+            check_cooldown=check_cooldown,
+            cooldown_msg=cooldown_msg,
+            NIGHT_DURATION=NIGHT_DURATION,
+            DAY_DURATION=DAY_DURATION,
+            VOTING_DURATION=VOTING_DURATION,
+            REGISTRATION_TIME=REGISTRATION_TIME,
+        )
         await application.bot.set_my_commands([
-            ("start",      "🎭 Botni ishga tushirish"),
-            ("newgame",    "🎮 Yangi o'yin boshlash"),
-            ("join",       "➕ O'yinga qo'shilish"),
-            ("profile",    "👤 Profilni ko'rish"),
-            ("balance",    "💰 Balansni ko'rish"),
-            ("shop",       "🛍 Magazin"),
-            ("lang",       "🌍 Tilni o'zgartirish"),
-            ("stopgame",   "🛑 O'yinni to'xtatish (admin)"),
-            ("resetgame",  "♻️ O'yinni reset (admin)"),
-            ("addadmin",   "➕ Admin qo'shish (admin)"),
-            ("removeadmin","➖ Adminni o'chirish (admin)"),
-            ("listadmins", "👨‍💼 Adminlar ro'yxati (admin)"),
-            ("admin",      "⚙️ Admin panel"),
+            ("start",       "🎭 Botni ishga tushirish"),
+            ("newgame",     "🎮 Yangi o'yin boshlash"),
+            ("join",        "➕ O'yinga qo'shilish"),
+            ("profile",     "👤 Profilni ko'rish"),
+            ("balance",     "💰 Balansni ko'rish"),
+            ("top",         "🏆 Top o'yinchilar"),
+            ("shop",        "🛍 Magazin"),
+            ("lang",        "🌍 Tilni o'zgartirish"),
+            ("admin",       "⚙️ Admin panel"),
+            ("stopgame",    "🛑 O'yinni to'xtatish"),
+            ("resetgame",   "♻️ O'yinni reset"),
+            ("gamestatus",  "📊 O'yin holati"),
+            ("speedgame",   "⏩ O'yinni tezlashtirish"),
+            ("showroles",   "🎭 Rollarni ko'rish"),
+            ("restartgame", "🔄 O'yinni qayta boshlash"),
+            ("ban",         "🚫 Ban qilish"),
+            ("unban",       "✅ Ban olib tashlash"),
+            ("warn",        "⚠️ Ogohlantirish"),
+            ("unwarn",      "🗑 Warnlarni tozalash"),
+            ("broadcast",   "📢 Xabar yuborish"),
+            ("userinfo",    "🔍 User ma'lumotlari"),
+            ("setbalance",  "💰 Balans o'rnatish"),
+            ("addmoney",    "💸 Pul qo'shish"),
+            ("removemoney", "💸 Pul olib tashlash"),
+            ("stats",       "📊 Bot statistikasi"),
+            ("addadmin",    "➕ Admin qo'shish"),
+            ("removeadmin", "➖ Adminni o'chirish"),
+            ("listadmins",  "👨‍💼 Adminlar ro'yxati"),
         ])
         logger.info("Bot komandalar menyusi o'rnatildi!")
 
@@ -2280,14 +2320,30 @@ def main():
     app.add_handler(CommandHandler("lang", lang))
     app.add_handler(CommandHandler("balance", balance))
     app.add_handler(CommandHandler("shop", shop))
-    app.add_handler(CommandHandler("admin", admin))
-    app.add_handler(CommandHandler("stopgame", stopgame))
-    app.add_handler(CommandHandler("resetgame", resetgame))
+    app.add_handler(CommandHandler("admin", adm.admin))
+    app.add_handler(CommandHandler("stopgame", adm.stopgame))
+    app.add_handler(CommandHandler("resetgame", adm.resetgame))
     app.add_handler(CommandHandler("join", join_command))
     app.add_handler(CommandHandler("profile", profile))
-    app.add_handler(CommandHandler("addadmin", addadmin))
-    app.add_handler(CommandHandler("removeadmin", removeadmin))
-    app.add_handler(CommandHandler("listadmins", listadmins))
+    app.add_handler(CommandHandler("addadmin", adm.addadmin))
+    app.add_handler(CommandHandler("removeadmin", adm.removeadmin))
+    app.add_handler(CommandHandler("listadmins", adm.listadmins))
+    # Premium admin komandalar
+    app.add_handler(CommandHandler("ban",         adm.ban))
+    app.add_handler(CommandHandler("unban",       adm.unban))
+    app.add_handler(CommandHandler("warn",        adm.warn))
+    app.add_handler(CommandHandler("unwarn",      adm.unwarn))
+    app.add_handler(CommandHandler("setbalance",  adm.setbalance))
+    app.add_handler(CommandHandler("addmoney",    adm.addmoney))
+    app.add_handler(CommandHandler("removemoney", adm.removemoney))
+    app.add_handler(CommandHandler("broadcast",   adm.broadcast))
+    app.add_handler(CommandHandler("userinfo",    adm.userinfo))
+    app.add_handler(CommandHandler("top",         adm.top))
+    app.add_handler(CommandHandler("stats",       adm.stats))
+    app.add_handler(CommandHandler("gamestatus",  adm.gamestatus))
+    app.add_handler(CommandHandler("speedgame",   adm.speedgame))
+    app.add_handler(CommandHandler("showroles",   adm.showroles))
+    app.add_handler(CommandHandler("restartgame", adm.restartgame))
     app.add_handler(CallbackQueryHandler(callbacks))
     # Rasm handler — /setphoto caption bilan (private + guruh)
     app.add_handler(MessageHandler(filters.PHOTO & filters.ChatType.PRIVATE, handle_photo))
