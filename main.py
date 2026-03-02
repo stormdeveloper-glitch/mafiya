@@ -1571,6 +1571,7 @@ async def start_game(context, chat_id: int):
 
     # Kecha fazasi
     game.state = "night"
+    session_remove(chat_id)  # O'yin boshlandi — JSON sessiya kerak emas
     game.private_votes.clear()
     game.night_actions = []
     game.public_votes = {"like": set(), "dislike": set()}
