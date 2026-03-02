@@ -772,6 +772,64 @@ games: Dict[int, Game] = {}
 # Bot username (post_init da to'ldiriladi)
 BOT_USERNAME: str = ""
 
+# ================== JSON SESSION STORAGE ==================
+
+SESSION_FILE = "session_players.json"
+
+def session_save(chat_id: int):
+    """Ro'yxatdagi o'yinchilarni JSON ga yozish"""
+    try:
+        # Mavjud faylni o'qish
+        if os.path.exists(SESSION_FILE):
+            with open(SESSION_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        else:
+            data = {}
+
+        game = games.get(chat_id)
+        if game and game.state == "registration":
+            data[str(chat_id)] = {
+                "chat_id": chat_id,
+                "reg_msg_id": game.reg_msg_id,
+                "created_at": datetime.now().isoformat(),
+                "players": [
+                    {"uid": p.id, "name": p.name}
+                    for p in game.players.values()
+                ]
+            }
+        else:
+            data.pop(str(chat_id), None)
+
+        with open(SESSION_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
+    except Exception as e:
+        logger.error(f"session_save xatosi: {e}")
+
+def session_remove(chat_id: int):
+    """O'yin tugaganda JSON dan o'chirish"""
+    try:
+        if not os.path.exists(SESSION_FILE):
+            return
+        with open(SESSION_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        data.pop(str(chat_id), None)
+        with open(SESSION_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error(f"session_remove xatosi: {e}")
+
+def session_load_all() -> dict:
+    """Barcha saqlangan sessiyalarni yuklash"""
+    try:
+        if not os.path.exists(SESSION_FILE):
+            return {}
+        with open(SESSION_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error(f"session_load_all xatosi: {e}")
+        return {}
+
 # Adminlarni bazadan yuklash, ADMIN_ID ni ham qo'shish
 ADMINS: set = DB.get_admins()
 if ADMIN_ID and ADMIN_ID != 0:
@@ -960,41 +1018,44 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(t(uid, "already_joined"))
             return
 
-            first_name = update.effective_user.first_name
-            game.players[uid] = Player(uid, first_name)
-            player_count = len(game.players)
-            logger.info(f"User {uid} joined game in chat {group_chat_id} via start link (total: {player_count})")
+        first_name = update.effective_user.first_name
+        game.players[uid] = Player(uid, first_name)
+        player_count = len(game.players)
+        logger.info(f"User {uid} joined game in chat {group_chat_id} via start link (total: {player_count})")
 
-            # Foydalanuvchiga shaxsiy xabar
-            await update.message.reply_text(
-                f"✅ {first_name}, siz o'yinga qo'shildingiz!\n"
-                f"👥 Jami o'yinchilar: {player_count}\n\n"
-                f"🎭 O'yin boshlanishini kuting..."
-            )
+        # O'yinchilarni JSON ga saqlash
+        session_save(group_chat_id)
 
-            # Guruh xabarini yangilash
-            names = "\n".join([f"• {p.name}" for p in game.players.values()])
-            new_text = (
-                f"🎭 <b>Mafia O'yini boshlandi!</b>\n\n"
-                f"📝 Ro'yxatdan o'tish davom etmoqda\n"
-                f"👥 O'yinchilar ({player_count}):\n{names}\n\n"
-                f"⏱ Qo'shilish uchun tugmani bosing!"
+        # Foydalanuvchiga shaxsiy xabar
+        await update.message.reply_text(
+            f"✅ {first_name}, siz o'yinga qo'shildingiz!\n"
+            f"👥 Jami o'yinchilar: {player_count}\n\n"
+            f"🎭 O'yin boshlanishini kuting..."
+        )
+
+        # Guruh xabarini yangilash
+        names = "\n".join([f"• {p.name}" for p in game.players.values()])
+        new_text = (
+            f"🎭 <b>Mafia O'yini boshlandi!</b>\n\n"
+            f"📝 Ro'yxatdan o'tish davom etmoqda\n"
+            f"👥 O'yinchilar ({player_count}):\n{names}\n\n"
+            f"⏱ Qo'shilish uchun tugmani bosing!"
+        )
+        try:
+            bot_name = BOT_USERNAME or "bot"
+            join_url = f"https://t.me/{bot_name}?start=chat_{group_chat_id}"
+            await context.bot.edit_message_text(
+                chat_id=group_chat_id,
+                message_id=game.reg_msg_id,
+                text=new_text,
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton(f"➕ Qo'shilish ({player_count})", url=join_url)
+                ]])
             )
-            try:
-                bot_name = BOT_USERNAME or "bot"
-                join_url = f"https://t.me/{bot_name}?start=chat_{group_chat_id}"
-                await context.bot.edit_message_text(
-                    chat_id=group_chat_id,
-                    message_id=game.reg_msg_id,
-                    text=new_text,
-                    parse_mode="HTML",
-                    reply_markup=InlineKeyboardMarkup([[
-                        InlineKeyboardButton(f"➕ Qo'shilish ({player_count})", url=join_url)
-                    ]])
-                )
-            except Exception as e:
-                logger.error(f"Error updating reg message: {e}")
-            return
+        except Exception as e:
+            logger.error(f"Error updating reg message: {e}")
+        return
 
     # ===== Oddiy /start — welcome xabari =====
     user_data = get_uid_data(uid)
@@ -1117,6 +1178,7 @@ async def stopgame(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     games[chat_id].state = "stopped"
     del games[chat_id]
+    session_remove(chat_id)
     logger.info(f"Admin {uid} stopped game in chat {chat_id}")
     await update.message.reply_text("🛑 " + t(uid, "game_stopped"))
 
@@ -1360,6 +1422,7 @@ async def resetgame(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if chat_id in games:
         games[chat_id].state = "stopped"
         del games[chat_id]
+        session_remove(chat_id)
     await safe_reply(update, context, "✅ O'yin tiklandi / Сброс выполнен / Game reset")
 
 async def join_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1476,6 +1539,7 @@ async def start_game(context, chat_id: int):
             logger.error(f"Error sending insufficient players msg: {e}")
         if chat_id in games:
             del games[chat_id]
+            session_remove(chat_id)
         return
 
     try:
@@ -1823,6 +1887,7 @@ async def end_game(context, chat_id: int, winner: str):
 
     if chat_id in games:
         del games[chat_id]
+        session_remove(chat_id)
 
 # ================== CALLBACKS ==================
 
@@ -1887,6 +1952,7 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if chat_id in games:
             games[chat_id].state = "stopped"
             del games[chat_id]
+            session_remove(chat_id)
             await safe_answer()
             await safe_edit("🛑 " + t(uid, "game_stopped"))
         else:
@@ -2183,6 +2249,28 @@ def main():
             ("admin",      "⚙️ Admin panel"),
         ])
         logger.info("Bot komandalar menyusi o'rnatildi!")
+
+        # ── JSON sessiyalardan o'yinchilarni tiklash ──
+        sessions = session_load_all()
+        restored = 0
+        for key, sess in sessions.items():
+            try:
+                cid = int(key)
+                # Agar o'yin allaqachon xotirada bo'lsa — o'tkazib yubor
+                if cid in games:
+                    continue
+                game = Game(cid)
+                game.reg_msg_id = sess.get("reg_msg_id")
+                game.state = "registration"
+                for p in sess.get("players", []):
+                    game.players[p["uid"]] = Player(p["uid"], p["name"])
+                games[cid] = game
+                restored += 1
+                logger.info(f"Sessiya tiklandi: chat {cid}, {len(game.players)} o'yinchi")
+            except Exception as e:
+                logger.error(f"Sessiya tiklash xatosi ({key}): {e}")
+        if restored:
+            logger.info(f"Jami {restored} ta sessiya JSON dan tiklandi")
 
     app.post_init = post_init
 
