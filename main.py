@@ -1824,7 +1824,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [
             InlineKeyboardButton(
                 "📢 Bot rasmiy kanalga o'tish",
-                url="https://t.me/+_i2XbehiR581ZWI6"
+                url="https://t.me/mafia_anime_rasmiy"
             )
         ]
     ])
