@@ -1503,54 +1503,60 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.error(f"Error updating reg message: {e}")
         return
 
-# ===== Oddiy /start — welcome xabari =====
-user_data = get_uid_data(uid)
-lang = user_data.get("lang", "uz")
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
 
-if lang == "ru":
-    text = ("🎭 Advanced Secret Mafia Bot\n\n"
-            "📋 Команды:\n"
-            "/newgame - Начать игру\n"
-            "/lang - Сменить язык\n"
-            "/shop - Магазин\n"
-            "/balance - Баланс\n\n"
-            "👮‍♂️ Для админов:\n"
-            "/admin - Панель\n"
-            "/stopgame - Остановить игру\n"
-            "/resetgame - Сброс")
-elif lang == "en":
-    text = ("🎭 Advanced Secret Mafia Bot\n\n"
-            "📋 Commands:\n"
-            "/newgame - Start game\n"
-            "/lang - Change language\n"
-            "/shop - Shop\n"
-            "/balance - Check balance\n\n"
-            "👮‍♂️ Admin commands:\n"
-            "/admin - Admin panel\n"
-            "/stopgame - Stop game\n"
-            "/resetgame - Reset game")
-else:
-    text = ("🎭 Advanced Secret Mafia Bot\n\n"
-            "📋 Buyruqlar:\n"
-            "/newgame - O'yin boshlash\n"
-            "/lang - Tilni o'zgartirish\n"
-            "/shop - Magazin\n"
-            "/balance - Balans\n"
-            "/aireset - AI tarixni tozalash\n\n"
-            "🤖 AI bilan suhbat: oddiy xabar yozing!\n\n"
-            "👮‍♂️ Admin buyruqlari:\n"
-            "/admin - Admin panel\n"
-            "/stopgame - O'yinni to'xtating\n"
-            "/resetgame - O'yinni tikla")
+    user_data = get_uid_data(uid)
+    lang = user_data.get("lang", "uz")
 
-keyboard = InlineKeyboardMarkup([[
-    InlineKeyboardButton(
-        "📢 Bot rasmiy kanalga o'tish",
-        url="https://t.me/+_i2XbehiR581ZWI6"
-    )
-]])
+    if lang == "ru":
+        text = ("🎭 Advanced Secret Mafia Bot\n\n"
+                "📋 Команды:\n"
+                "/newgame - Начать игру\n"
+                "/lang - Сменить язык\n"
+                "/shop - Магазин\n"
+                "/balance - Баланс\n\n"
+                "👮‍♂️ Для админов:\n"
+                "/admin - Панель\n"
+                "/stopgame - Остановить игру\n"
+                "/resetgame - Сброс")
 
-await safe_reply(update, context, text, reply_markup=keyboard)
+    elif lang == "en":
+        text = ("🎭 Advanced Secret Mafia Bot\n\n"
+                "📋 Commands:\n"
+                "/newgame - Start game\n"
+                "/lang - Change language\n"
+                "/shop - Shop\n"
+                "/balance - Check balance\n\n"
+                "👮‍♂️ Admin commands:\n"
+                "/admin - Admin panel\n"
+                "/stopgame - Stop game\n"
+                "/resetgame - Reset game")
+
+    else:
+        text = ("🎭 Advanced Secret Mafia Bot\n\n"
+                "📋 Buyruqlar:\n"
+                "/newgame - O'yin boshlash\n"
+                "/lang - Tilni o'zgartirish\n"
+                "/shop - Magazin\n"
+                "/balance - Balans\n"
+                "/aireset - AI tarixni tozalash\n\n"
+                "🤖 AI bilan suhbat: oddiy xabar yozing!\n\n"
+                "👮‍♂️ Admin buyruqlari:\n"
+                "/admin - Admin panel\n"
+                "/stopgame - O'yinni to'xtating\n"
+                "/resetgame - O'yinni tikla")
+
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "📢 Bot rasmiy kanalga o'tish",
+                url="https://t.me/+_i2XbehiR581ZWI6"
+            )
+        ]
+    ])
+
+    await safe_reply(update, context, text, reply_markup=keyboard)
 
 async def lang(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
