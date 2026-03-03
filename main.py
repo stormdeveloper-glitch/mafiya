@@ -1327,9 +1327,22 @@ async def ai_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         reply = await _gemini_chat(uid, text, user_name)
         await update.message.reply_text(f"🤖 {reply}")
+    except httpx.HTTPStatusError as e:
+        logger.error(f"Gemini HTTP error {uid}: {e.response.status_code} — {e.response.text}")
+        if e.response.status_code == 400:
+            await update.message.reply_text("❌ API so'rovi noto'g'ri (400). GEMINI_API_KEY ni tekshiring.")
+        elif e.response.status_code == 403:
+            await update.message.reply_text("❌ API ruxsat yo'q (403). Key noto'g'ri yoki bloklangan.")
+        elif e.response.status_code == 429:
+            await update.message.reply_text("⏳ API limiti to'ldi (429). Bir oz kuting.")
+        else:
+            await update.message.reply_text(f"❌ API xatosi: {e.response.status_code}")
+    except httpx.TimeoutException:
+        logger.error(f"Gemini timeout {uid}")
+        await update.message.reply_text("⏳ AI javob bermadi (timeout). Qayta urinib ko'ring.")
     except Exception as e:
-        logger.error(f"Gemini error {uid}: {e}")
-        await update.message.reply_text("❌ AI hozircha javob bermayapti. Keyinroq urinib ko'ring.")
+        logger.error(f"Gemini error {uid}: {type(e).__name__}: {e}")
+        await update.message.reply_text(f"❌ Xato: {type(e).__name__}: {str(e)[:100]}")
 
 
 async def imagine(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1490,47 +1503,54 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.error(f"Error updating reg message: {e}")
         return
 
-    # ===== Oddiy /start — welcome xabari =====
-    user_data = get_uid_data(uid)
-    lang = user_data.get("lang", "uz")
+# ===== Oddiy /start — welcome xabari =====
+user_data = get_uid_data(uid)
+lang = user_data.get("lang", "uz")
 
-    if lang == "ru":
-        text = ("🎭 Advanced Secret Mafia Bot\n\n"
-                "📋 Команды:\n"
-                "/newgame - Начать игру\n"
-                "/lang - Сменить язык\n"
-                "/shop - Магазин\n"
-                "/balance - Баланс\n\n"
-                "👮‍♂️ Для админов:\n"
-                "/admin - Панель\n"
-                "/stopgame - Остановить игру\n"
-                "/resetgame - Сброс")
-    elif lang == "en":
-        text = ("🎭 Advanced Secret Mafia Bot\n\n"
-                "📋 Commands:\n"
-                "/newgame - Start game\n"
-                "/lang - Change language\n"
-                "/shop - Shop\n"
-                "/balance - Check balance\n\n"
-                "👮‍♂️ Admin commands:\n"
-                "/admin - Admin panel\n"
-                "/stopgame - Stop game\n"
-                "/resetgame - Reset game")
-    else:
-        text = ("🎭 Advanced Secret Mafia Bot\n\n"
-                "📋 Buyruqlar:\n"
-                "/newgame - O'yin boshlash\n"
-                "/lang - Tilni o'zgartirish\n"
-                "/shop - Magazin\n"
-                "/balance - Balans\n"
-                "/aireset - AI tarixni tozalash\n\n"
-                "🤖 AI bilan suhbat: oddiy xabar yozing!\n\n"
-                "👮‍♂️ Admin buyruqlari:\n"
-                "/admin - Admin panel\n"
-                "/stopgame - O'yinni to'xtating\n"
-                "/resetgame - O'yinni tikla")
+if lang == "ru":
+    text = ("🎭 Advanced Secret Mafia Bot\n\n"
+            "📋 Команды:\n"
+            "/newgame - Начать игру\n"
+            "/lang - Сменить язык\n"
+            "/shop - Магазин\n"
+            "/balance - Баланс\n\n"
+            "👮‍♂️ Для админов:\n"
+            "/admin - Панель\n"
+            "/stopgame - Остановить игру\n"
+            "/resetgame - Сброс")
+elif lang == "en":
+    text = ("🎭 Advanced Secret Mafia Bot\n\n"
+            "📋 Commands:\n"
+            "/newgame - Start game\n"
+            "/lang - Change language\n"
+            "/shop - Shop\n"
+            "/balance - Check balance\n\n"
+            "👮‍♂️ Admin commands:\n"
+            "/admin - Admin panel\n"
+            "/stopgame - Stop game\n"
+            "/resetgame - Reset game")
+else:
+    text = ("🎭 Advanced Secret Mafia Bot\n\n"
+            "📋 Buyruqlar:\n"
+            "/newgame - O'yin boshlash\n"
+            "/lang - Tilni o'zgartirish\n"
+            "/shop - Magazin\n"
+            "/balance - Balans\n"
+            "/aireset - AI tarixni tozalash\n\n"
+            "🤖 AI bilan suhbat: oddiy xabar yozing!\n\n"
+            "👮‍♂️ Admin buyruqlari:\n"
+            "/admin - Admin panel\n"
+            "/stopgame - O'yinni to'xtating\n"
+            "/resetgame - O'yinni tikla")
 
-    await safe_reply(update, context, text)
+keyboard = InlineKeyboardMarkup([[
+    InlineKeyboardButton(
+        "📢 Bot rasmiy kanalga o'tish",
+        url="https://t.me/+_i2XbehiR581ZWI6"
+    )
+]])
+
+await safe_reply(update, context, text, reply_markup=keyboard)
 
 async def lang(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
