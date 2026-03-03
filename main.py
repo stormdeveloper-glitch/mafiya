@@ -32,12 +32,15 @@ logger = logging.getLogger(__name__)
 # ================== CONFIG ==================
 
 import os
+import httpx
+import base64
 from dotenv import load_dotenv
 import admin as adm
 
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 
 if not BOT_TOKEN:
@@ -1121,6 +1124,294 @@ async def check_win_conditions(context, chat_id: int) -> Optional[str]:
 
 # ================== COMMANDS ==================
 
+# ================== AI CHAT (GEMINI) + IMAGE (IMAGEN 3) ==================
+
+ai_conversations: Dict[int, List[dict]] = {}
+AI_MAX_HISTORY = 20
+
+# Admin boshqaradigan sozlamalar
+AI_SETTINGS = {
+    "ai_enabled": True,
+    "image_enabled": True,
+    "image_daily_limit": 5,
+}
+image_usage: Dict[int, dict] = {}
+
+# ── SYSTEM PROMPT ──────────────────────────────────────────────────────────────
+GEMINI_SYSTEM_PROMPT = """Sen "Mafia Bot" — Telegram'dagi anime mavzusidagi professional Mafiya o'yini botining aqlli yordamchisisisan.
+
+🎭 SEN KIMSAN:
+- Ismingiz: Mafia Bot AI
+- Shaxsiyating: Do'stona, qiziqarli, aqlli va biroz dramatik (anime uslubida)
+- Suhbat olib borish uslubi: Jonli, qiziqarli, ba'zan emoji ishlatib, lekin haddan oshmasdan
+
+🎮 O'YIN HAQIDA BILADIGAN NARSALARING:
+Rollar:
+  • 👔 DON — Mafiya boshlig'i. Kechasi o'ldirish buyrug'i beradi. Kunduz boshqalarga o'xshab ko'rinadi.
+  • 🔪 MAFIA — Don'ning sheriklari. Kechasi birga harakat qiladi.
+  • 💚 DOCTOR — Kechasi bir kishini o'ldirishdan himoya qila oladi.
+  • 🔎 KILLER (Tergovchi) — Kechasi bir kishining rolini bilib oladi.
+  • 👤 CITIZEN — Oddiy fuqaro. Kunduz ovoz berib mafiyani topmog'i kerak.
+
+O'yin bosqichlari:
+  1. Ro'yxatdan o'tish (120 soniya)
+  2. Kecha (60 soniya) — maxfiy harakatlar
+  3. Kunduz (120 soniya) — muhokama
+  4. Ovoz berish (60 soniya) — kimni osish
+  5. Final ovoz — osish yoki saqlash
+
+G'alaba shartlari:
+  • Shahar g'alaba qiladi — barcha mafiyani topib ossa
+  • Mafia g'alaba qiladi — fuqarolar soni mafiyadan kam bo'lsa
+
+Shop buyumlari:
+  • 🌀 Infinity Barrier (20 coin) — 1 kecha himoya
+  • 🎭 Kitsune Mask (15 coin) — rolni yashirish
+  • ⚡ Bankai Power (25 coin) — faol rol kuchaytirgichi
+  • ♾️ O'lmasizlik (50 coin) — bir marta o'lmaydi
+
+Buyruqlar: /newgame, /join, /shop, /balance, /profile, /top, /lang, /imagine
+
+🌟 UMUMIY SUHBAT:
+Sen faqat o'yin haqida emas, har qanday mavzuda suhbatlasha olasan:
+  • Anime, manga, gaming haqida
+  • Hayot, sevgi, do'stlik, maqsadlar haqida
+  • Texnologiya, fan, qiziqarli faktlar
+  • Hazil va qiziqarli suhbat
+  • Agar biror narsa haqida bilmasang — rostini ayt
+
+💬 JAVOB BERISH QOIDALARI:
+  • Har doim O'zbek tilida javob ber (foydalanuvchi boshqa tilda yozsa ham, o'zbek tilida javob ber)
+  • Qisqa va aniq javob ber (3-5 jumla odatda yetarli)
+  • Haddan ortiq rasmiy bo'lma — do'stona gapir
+  • Foydalanuvchi nomini bilsang, ishlatib gapir
+  • O'yin davomida yordam so'rasa — tezda strategiya ber
+  • Haqorat yoki yomon niyatli so'rovlarga javob berma
+
+🎌 ANIME USLUBI:
+Gohida anime personajlaridan iqtibos keltirish yoki ularning uslubida gapirish mumkin, lekin haddan oshmaslik kerak. O'yin personajlari: Gojo Satoru, Itachi, Naruto, Luffy, Ichigo, Tanjiro va boshqalar."""
+
+
+def _get_today() -> str:
+    return datetime.now().strftime("%Y-%m-%d")
+
+
+def _image_count_today(uid: int) -> int:
+    return image_usage.get(uid, {}).get(_get_today(), 0)
+
+
+def _increment_image_count(uid: int):
+    today = _get_today()
+    if uid not in image_usage:
+        image_usage[uid] = {}
+    image_usage[uid] = {today: image_usage[uid].get(today, 0) + 1}
+
+
+async def _gemini_chat(uid: int, text: str, user_name: str = "") -> str:
+    """Gemini 2.0 Flash bilan suhbat"""
+    if uid not in ai_conversations:
+        ai_conversations[uid] = []
+
+    # Foydalanuvchi ismini system prompt ga qo'shish
+    system = GEMINI_SYSTEM_PROMPT
+    if user_name:
+        system += f"\n\nHozir suhbatlashayotgan foydalanuvchi ismi: {user_name}"
+
+    ai_conversations[uid].append({"role": "user", "parts": [{"text": text}]})
+    if len(ai_conversations[uid]) > AI_MAX_HISTORY * 2:
+        ai_conversations[uid] = ai_conversations[uid][-AI_MAX_HISTORY * 2:]
+
+    payload = {
+        "system_instruction": {"parts": [{"text": system}]},
+        "contents": ai_conversations[uid],
+        "generationConfig": {
+            "maxOutputTokens": 800,
+            "temperature": 0.85,
+            "topP": 0.95,
+            "topK": 40,
+        },
+        "safetySettings": [
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+        ],
+    }
+
+    url = (
+        f"https://generativelanguage.googleapis.com/v1beta/models/"
+        f"gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
+    )
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.post(url, json=payload)
+        resp.raise_for_status()
+        data = resp.json()
+
+    reply = data["candidates"][0]["content"]["parts"][0]["text"]
+    ai_conversations[uid].append({"role": "model", "parts": [{"text": reply}]})
+    return reply
+
+
+async def _imagen3_generate(prompt: str) -> bytes:
+    """Google Imagen 3 orqali rasm generatsiya"""
+    # Promptni anime/fantasy uslubida kuchaytirish
+    enhanced_prompt = (
+        f"{prompt}, anime style, high quality, detailed, vibrant colors, "
+        f"digital art, professional illustration"
+    )
+
+    payload = {
+        "instances": [{"prompt": enhanced_prompt}],
+        "parameters": {
+            "sampleCount": 1,
+            "aspectRatio": "1:1",
+            "safetyFilterLevel": "block_some",
+            "personGeneration": "allow_adult",
+        },
+    }
+
+    url = (
+        f"https://us-central1-aiplatform.googleapis.com/v1/projects/"
+        f"generativelanguage/locations/us-central1/publishers/google/models/"
+        f"imagen-3.0-generate-002:predict"
+    )
+
+    # Gemini API key bilan Imagen 3 (Google AI Studio endpoint)
+    imagen_url = (
+        f"https://generativelanguage.googleapis.com/v1beta/models/"
+        f"imagen-3.0-generate-002:predict?key={GEMINI_API_KEY}"
+    )
+
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.post(imagen_url, json=payload)
+        resp.raise_for_status()
+        data = resp.json()
+
+    # Base64 rasmni decode qilish
+    predictions = data.get("predictions", [])
+    if not predictions:
+        raise ValueError("Imagen API bo'sh javob qaytardi")
+
+    img_b64 = predictions[0].get("bytesBase64Encoded", "")
+    if not img_b64:
+        raise ValueError("Rasmda base64 ma'lumot yo'q")
+
+    return base64.b64decode(img_b64)
+
+
+async def ai_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Private chatda oddiy matn — Gemini javob beradi"""
+    if not update.message or not update.message.text:
+        return
+    if update.effective_chat.type != "private":
+        return
+
+    uid = update.effective_user.id
+    text = update.message.text.strip()
+
+    if text.startswith("/"):
+        return
+
+    if not AI_SETTINGS.get("ai_enabled", True):
+        await update.message.reply_text("🤖 AI hozircha o'chirilgan.")
+        return
+
+    if not GEMINI_API_KEY:
+        await update.message.reply_text(
+            "🤖 AI sozlanmagan.\nAdmin GEMINI_API_KEY ni Railway ga qo'shishi kerak."
+        )
+        return
+
+    await context.bot.send_chat_action(chat_id=uid, action="typing")
+
+    user_name = update.effective_user.first_name or ""
+
+    try:
+        reply = await _gemini_chat(uid, text, user_name)
+        await update.message.reply_text(f"🤖 {reply}")
+    except Exception as e:
+        logger.error(f"Gemini error {uid}: {e}")
+        await update.message.reply_text("❌ AI hozircha javob bermayapti. Keyinroq urinib ko'ring.")
+
+
+async def imagine(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/imagine <tavsif> — Imagen 3 orqali rasm yaratish"""
+    uid = update.effective_user.id
+    user_data = get_uid_data(uid)
+    lang = user_data.get("lang", "uz")
+
+    if not AI_SETTINGS.get("image_enabled", True):
+        await update.message.reply_text("🖼 Rasm generatsiya hozircha o'chirilgan.")
+        return
+
+    limit = AI_SETTINGS.get("image_daily_limit", 5)
+    used = _image_count_today(uid)
+    if used >= limit and limit < 999:
+        await update.message.reply_text(
+            f"⛔ Kunlik limitga yetdingiz: {used}/{limit} ta rasm.\n"
+            f"⏰ Ertaga qayta urinib ko'ring!"
+        )
+        return
+
+    if not context.args:
+        await update.message.reply_text(
+            "🎨 <b>Rasm yaratish</b>\n\n"
+            "Foydalanish: /imagine <tavsif>\n\n"
+            "Misollar:\n"
+            "• /imagine anime girl with blue hair in moonlight\n"
+            "• /imagine ninja warrior in forest\n"
+            "• /imagine futuristic city at sunset\n\n"
+            f"📊 Bugun: {used}/{limit} ta rasm ishlatilgan",
+            parse_mode="HTML"
+        )
+        return
+
+    if not GEMINI_API_KEY:
+        await update.message.reply_text(
+            "🖼 Imagen API sozlanmagan.\nAdmin GEMINI_API_KEY ni qo'shishi kerak."
+        )
+        return
+
+    prompt = " ".join(context.args)
+    wait_msg = await update.message.reply_text("🎨 Rasm yaratilmoqda... ⏳")
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="upload_photo")
+
+    try:
+        img_bytes = await _imagen3_generate(prompt)
+        _increment_image_count(uid)
+        remaining = limit - _image_count_today(uid)
+
+        await wait_msg.delete()
+        import io as _io
+        remaining_str = "♾️" if limit >= 999 else str(remaining)
+        await update.message.reply_photo(
+            photo=_io.BytesIO(img_bytes),
+            caption=(
+                f"🎨 <b>{prompt}</b>\n\n"
+                f"✨ Google Imagen 3 | Qoldi: {remaining_str}/{limit if limit < 999 else '♾️'}"
+            ),
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        logger.error(f"Imagen3 error {uid}: {e}")
+        await wait_msg.delete()
+        await update.message.reply_text(
+            "❌ Rasm yaratishda xato yuz berdi.\n"
+            "Promptni o'zgartirib qayta urinib ko'ring."
+        )
+
+
+async def ai_reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """AI suhbat tarixini tozalash"""
+    uid = update.effective_user.id
+    ai_conversations.pop(uid, None)
+    await update.message.reply_text(
+        "🔄 AI suhbat tarixi tozalandi!\n"
+        "Endi yangi suhbat boshlanadi. 😊"
+    )
+
+
+
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     chat = update.effective_chat
@@ -1175,10 +1466,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Guruh xabarini yangilash
         names = "\n".join([f"• {p.name}" for p in game.players.values()])
         new_text = (
-            f"🎭 <b>Mafia O'yini boshlandi!</b>\n\n"
-            f"📝 Ro'yxatdan o'tish davom etmoqda\n"
-            f"👥 O'yinchilar ({player_count}):\n{names}\n\n"
-            f"⏱ Qo'shilish uchun tugmani bosing!"
+            f"⚔️ <b>MAFIYA O'YINi BOSHLANMOQDA!</b> ⚔️\n\n"
+            f"🎌 Anime qahramonlari:\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"{names}\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"👥 Jami: <b>{player_count}</b> nafar qahramon\n"
+            f"⏳ Ro'yxat davom etmoqda..."
         )
         try:
             bot_name = BOT_USERNAME or "bot"
@@ -1228,7 +1522,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "/newgame - O'yin boshlash\n"
                 "/lang - Tilni o'zgartirish\n"
                 "/shop - Magazin\n"
-                "/balance - Balans\n\n"
+                "/balance - Balans\n"
+                "/aireset - AI tarixni tozalash\n\n"
+                "🤖 AI bilan suhbat: oddiy xabar yozing!\n\n"
                 "👮‍♂️ Admin buyruqlari:\n"
                 "/admin - Admin panel\n"
                 "/stopgame - O'yinni to'xtating\n"
@@ -1510,11 +1806,13 @@ async def newgame(update: Update, context: ContextTypes.DEFAULT_TYPE):
     join_url = f"https://t.me/{bot_name}?start=chat_{chat_id}"
 
     reg_text = (
-        f"🎭 <b>Mafia O'yini boshlandi!</b>\n\n"
-        f"📝 Ro'yxatdan o'tish davom etmoqda\n"
-        f"👥 O'yinchilar: <b>0</b>\n\n"
-        f"🕐 <b>{REGISTRATION_TIME} soniya</b>\n"
-        f"✅ Qo'shilish uchun tugmani bosing!"
+        f"⚔️ <b>MAFIYA O'YINi BOSHLANMOQDA!</b> ⚔️\n\n"
+        f"🎌 Anime qahramonlari to'planmoqda...\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"👥 O'yinchilar: <b>0</b> nafar\n"
+        f"⏳ Ro'yxat: <b>{REGISTRATION_TIME} soniya</b>\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"👇 <b>Qo'shilish uchun tugmani bosing!</b>"
     )
 
     try:
@@ -1611,7 +1909,36 @@ async def start_game(context, chat_id: int):
     game.used_night.clear()
 
     uid = list(alive_players.keys())[0]
-    await safe_send_photo(context, chat_id, NIGHT_IMAGE_URL, t(uid, "night"))
+
+    # Anime uslubida o'yin boshlanishi e'loni
+    player_list = "\n".join([f"   {'👑' if p.role in ('don','mafia') else '🌟'} {p.name}" 
+                              for p in alive_players.values()])
+    start_announce = (
+        f"🎌 <b>O'YIN BOSHLANDI!</b> 🎌\n\n"
+        f"⚔️ Round <b>{game.round}</b> — Jangchilar:\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"{player_list}\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"👥 Jami: <b>{len(alive_players)}</b> nafar\n\n"
+        f"📩 Har bir o'yinchi <b>shaxsiy xabar</b> oladi!"
+    )
+    try:
+        await context.bot.send_message(chat_id, start_announce, parse_mode="HTML")
+    except Exception as e:
+        logger.error(f"Error sending start announce: {e}")
+
+    night_text = (
+        f"🌙 <b>KECHA BOSHLANDI...</b> 🌙\n\n"
+        f"🤫 <i>Shahar uxlab qoldi...</i>\n"
+        f"🔪 Mafiya harakatga tayyor!\n"
+        f"💚 Doktor kimnidir saqlamoqda...\n"
+        f"🔎 Tergovchi sir izlamoqda...\n\n"
+        f"⏳ <b>{NIGHT_DURATION} soniya</b> — Jim turing!"
+    )
+    try:
+        await context.bot.send_message(chat_id, night_text, parse_mode="HTML")
+    except Exception as e:
+        logger.error(f"Error sending night text: {e}")
 
     for player in alive_players.values():
         await send_role_message(context, player, game)
@@ -1706,11 +2033,21 @@ async def process_night_actions(context, chat_id: int):
     alive_ids = [p.id for p in game.players.values() if p.alive]
     ref_uid = alive_ids[0] if alive_ids else next(iter(game.players), 0)
 
-    alive_names = "\n".join([f"• {p.name}" for p in game.players.values() if p.alive])
+    alive_names = "\n".join([f"   ✅ {p.name}" for p in game.players.values() if p.alive])
+    dead_names = "\n".join([f"   💀 {p.name}" for p in game.players.values() if not p.alive])
+
     day_text = (
-        f"☀️ <b>Kunduz boshlandi!</b>\n\n"
-        f"👥 Tirik o'yinchilar ({len(alive_ids)}):\n{alive_names}\n\n"
-        f"💬 Muhokama qiling! {DAY_DURATION} soniya..."
+        f"☀️ <b>TONG OTDI!</b> ☀️\n\n"
+        f"🌅 <i>Shahar uyg'ondi... lekin kimdir yo'q!</i>\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"✅ <b>Tirik ({len(alive_ids)}):</b>\n{alive_names}\n"
+    )
+    if dead_names:
+        day_text += f"\n💀 <b>Halok bo'lganlar:</b>\n{dead_names}\n"
+    day_text += (
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"💬 <b>Muhokama boshlandi!</b>\n"
+        f"⏳ {DAY_DURATION} soniya — Mafiyani toping!"
     )
 
     try:
@@ -1895,11 +2232,27 @@ async def end_game(context, chat_id: int, winner: str):
         alive_icon = "✅" if p.alive else "💀"
         roles_text += f"{alive_icon} {p.name} — <b>{r}</b>\n"
 
+    if winner == "mafia":
+        winner_banner = (
+            f"🔴 <b>MAFIA G'ALABA QILDI!</b> 🔴\n\n"
+            f"😈 <i>Qorong'ulik shaharni yutdi...</i>\n"
+            f"🔪 Don va uning sheriklari hamma narsani nazorat ostiga oldi!"
+        )
+    else:
+        winner_banner = (
+            f"🟢 <b>SHAHAR G'ALABA QILDI!</b> 🟢\n\n"
+            f"🎉 <i>Adolat qaror topdi!</i>\n"
+            f"🦸 Qahramonlar mafiyani mag'lub etdi!"
+        )
+
     result_text = (
-        f"🏁 <b>O'YIN TUGADI!</b>\n\n"
-        f"🏆 G'olib: <b>{winner_label}</b>\n"
-        f"💰 Mukofot: <b>{WIN_REWARD} coin</b>\n\n"
-        f"📋 <b>Rollar:</b>\n{roles_text}"
+        f"🏁 <b>O'YIN TUGADI!</b> 🏁\n\n"
+        f"{winner_banner}\n\n"
+        f"💰 G'oliblar mukofoti: <b>{WIN_REWARD} coin</b>\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"🎭 <b>Barcha rollar:</b>\n{roles_text}"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"🎮 Yangi o'yin: /newgame"
     )
 
     try:
@@ -1910,11 +2263,23 @@ async def end_game(context, chat_id: int, winner: str):
     # Har bir o'yinchiga shaxsiy xabar
     for p in game.players.values():
         won = p.id in winner_ids
+        role_name = role_emoji.get(p.role, "?")
         try:
             if won:
-                personal = f"🎉 Tabriklaymiz! Siz <b>G'OLIB</b>siz!\n💰 +{WIN_REWARD} coin qo'shildi!"
+                personal = (
+                    f"🎊 <b>TABRIKLAYMIZ!</b> 🎊\n\n"
+                    f"🏆 Siz <b>G'OLIB</b>siz!\n"
+                    f"🎭 Rolingiz: <b>{role_name}</b>\n"
+                    f"💰 Mukofot: <b>+{WIN_REWARD} coin</b> qo'shildi!\n\n"
+                    f"⚔️ Yana o'ynash: /newgame"
+                )
             else:
-                personal = f"😔 Siz yutqazdingiz. Keyingi o'yinda omad!\n\n🎭 Sizning rolingiz: <b>{role_emoji.get(p.role, '?')}</b>"
+                personal = (
+                    f"💀 <b>Siz yutqazdingiz...</b>\n\n"
+                    f"😔 <i>Bu safar omad kulib boqmadi</i>\n"
+                    f"🎭 Rolingiz: <b>{role_name}</b>\n\n"
+                    f"💪 Keyingi o'yinda qaytib keling: /newgame"
+                )
             await context.bot.send_message(p.id, personal, parse_mode="HTML")
         except:
             pass
@@ -2349,6 +2714,13 @@ def main():
     app.add_handler(MessageHandler(filters.PHOTO & filters.ChatType.PRIVATE, handle_photo))
     app.add_handler(MessageHandler(filters.PHOTO & filters.ChatType.GROUPS, handle_photo))
     app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.GROUPS, chat_guard))
+    # AI chat (Gemini) + Nano Banana rasm
+    app.add_handler(CommandHandler("aireset", ai_reset))
+    app.add_handler(CommandHandler("imagine", imagine))
+    app.add_handler(MessageHandler(
+        filters.TEXT & filters.ChatType.PRIVATE & ~filters.COMMAND,
+        ai_chat
+    ))
 
     logger.info("Bot ishga tushdi!")
     app.run_polling()
