@@ -83,6 +83,8 @@ def _main_kb():
          InlineKeyboardButton("⚠️ Warn tizimi",       callback_data="adm:warn_menu")],
         [InlineKeyboardButton("📢 Broadcast",         callback_data="adm:broadcast_prompt"),
          InlineKeyboardButton("🎮 O'yin boshqaruvi",  callback_data="adm:game_menu")],
+        [InlineKeyboardButton("🤖 AI Boshqaruv",      callback_data="adm:ai_menu"),
+         InlineKeyboardButton("🖼 Rasm Sozlamalar",   callback_data="adm:image_menu")],
         [InlineKeyboardButton("👨‍💼 Adminlar ro'yxati", callback_data="list_admins"),
          InlineKeyboardButton("🛑 O'yinni to'xtatish", callback_data="admin_stop_game")],
     ])
@@ -721,5 +723,143 @@ async def handle_admin_callback(q, uid, safe_answer, safe_edit):
             _session_remove(chat_id)
             clear_speed(chat_id)
         await safe_answer("🛑 O'yin to'xtatildi!", alert=True); return True
+
+    # ── AI boshqaruv menyusi ──
+    if cmd == "ai_menu":
+        from main import AI_SETTINGS
+        ai_on = AI_SETTINGS.get("ai_enabled", True)
+        img_on = AI_SETTINGS.get("image_enabled", True)
+        limit = AI_SETTINGS.get("image_daily_limit", 5)
+        ochiq = "O\'chiq"
+        ochirish = "O\'chirish"
+        status = (
+            f"🤖 <b>AI Boshqaruv Paneli</b>\n\n"
+            f"💬 Gemini Chat: {'✅ Yoqiq' if ai_on else '❌ ' + ochiq}\n"
+            f"🖼 Nano Banana: {'✅ Yoqiq' if img_on else '❌ ' + ochiq}\n"
+            f"📊 Kunlik rasm limiti: <b>{limit}</b> ta\n\n"
+            f"Quyidagi tugmalar orqali boshqaring:"
+        )
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton(
+                ("💬 Gemini: ✅ Yoqiq → " + ochirish) if ai_on else ("💬 Gemini: ❌ " + ochiq + " → Yoqish"),
+                callback_data="adm:ai_toggle"
+            )],
+            [InlineKeyboardButton(
+                ("🖼 Nano Banana: ✅ Yoqiq → " + ochirish) if img_on else ("🖼 Nano Banana: ❌ " + ochiq + " → Yoqish"),
+                callback_data="adm:img_toggle"
+            )],
+            [InlineKeyboardButton("📊 Rasm limiti sozla", callback_data="adm:image_menu")],
+            [InlineKeyboardButton("🔙 Orqaga", callback_data="adm:back_main")],
+        ])
+        await safe_answer()
+        await safe_edit(status, parse_mode="HTML", reply_markup=kb)
+        return True
+
+    if cmd == "ai_toggle":
+        from main import AI_SETTINGS
+        AI_SETTINGS["ai_enabled"] = not AI_SETTINGS.get("ai_enabled", True)
+        state = "✅ Yoqildi" if AI_SETTINGS["ai_enabled"] else "❌ O'chirildi"
+        await safe_answer(f"💬 Gemini Chat: {state}", alert=True)
+        # Menyuni yangilash
+        ai_on = AI_SETTINGS.get("ai_enabled", True)
+        img_on = AI_SETTINGS.get("image_enabled", True)
+        limit = AI_SETTINGS.get("image_daily_limit", 5)
+        status = (
+            f"🤖 <b>AI Boshqaruv Paneli</b>\n\n"
+            f"💬 Gemini Chat: {'✅ Yoqiq' if ai_on else '❌ O\'chiq'}\n"
+            f"🖼 Nano Banana: {'✅ Yoqiq' if img_on else '❌ O\'chiq'}\n"
+            f"📊 Kunlik rasm limiti: <b>{limit}</b> ta"
+        )
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton(
+                f"💬 Gemini: {'✅ Yoqiq → O\'chirish' if ai_on else '❌ O\'chiq → Yoqish'}",
+                callback_data="adm:ai_toggle"
+            )],
+            [InlineKeyboardButton(
+                f"🖼 Nano Banana: {'✅ Yoqiq → O\'chirish' if img_on else '❌ O\'chiq → Yoqish'}",
+                callback_data="adm:img_toggle"
+            )],
+            [InlineKeyboardButton("📊 Rasm limiti sozla", callback_data="adm:image_menu")],
+            [InlineKeyboardButton("🔙 Orqaga", callback_data="adm:back_main")],
+        ])
+        await safe_edit(status, parse_mode="HTML", reply_markup=kb)
+        return True
+
+    if cmd == "img_toggle":
+        from main import AI_SETTINGS
+        AI_SETTINGS["image_enabled"] = not AI_SETTINGS.get("image_enabled", True)
+        state = "✅ Yoqildi" if AI_SETTINGS["image_enabled"] else "❌ O'chirildi"
+        await safe_answer(f"🖼 Nano Banana: {state}", alert=True)
+        ai_on = AI_SETTINGS.get("ai_enabled", True)
+        img_on = AI_SETTINGS.get("image_enabled", True)
+        limit = AI_SETTINGS.get("image_daily_limit", 5)
+        status = (
+            f"🤖 <b>AI Boshqaruv Paneli</b>\n\n"
+            f"💬 Gemini Chat: {'✅ Yoqiq' if ai_on else '❌ O\'chiq'}\n"
+            f"🖼 Nano Banana: {'✅ Yoqiq' if img_on else '❌ O\'chiq'}\n"
+            f"📊 Kunlik rasm limiti: <b>{limit}</b> ta"
+        )
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton(
+                f"💬 Gemini: {'✅ Yoqiq → O\'chirish' if ai_on else '❌ O\'chiq → Yoqish'}",
+                callback_data="adm:ai_toggle"
+            )],
+            [InlineKeyboardButton(
+                f"🖼 Nano Banana: {'✅ Yoqiq → O\'chirish' if img_on else '❌ O\'chiq → Yoqish'}",
+                callback_data="adm:img_toggle"
+            )],
+            [InlineKeyboardButton("📊 Rasm limiti sozla", callback_data="adm:image_menu")],
+            [InlineKeyboardButton("🔙 Orqaga", callback_data="adm:back_main")],
+        ])
+        await safe_edit(status, parse_mode="HTML", reply_markup=kb)
+        return True
+
+    # ── Rasm limiti menyusi ──
+    if cmd == "image_menu":
+        from main import AI_SETTINGS
+        limit = AI_SETTINGS.get("image_daily_limit", 5)
+        img_on = AI_SETTINGS.get("image_enabled", True)
+        text = (
+            f"🖼 <b>Rasm Sozlamalari</b>\n\n"
+            f"Holat: {'✅ Yoqiq' if img_on else '❌ O\'chiq'}\n"
+            f"📊 Hozirgi kunlik limit: <b>{limit}</b> ta/foydalanuvchi\n\n"
+            f"Limitni o'zgartirish:"
+        )
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("1️⃣  1 ta",  callback_data="adm:setlimit_1"),
+             InlineKeyboardButton("3️⃣  3 ta",  callback_data="adm:setlimit_3"),
+             InlineKeyboardButton("5️⃣  5 ta",  callback_data="adm:setlimit_5")],
+            [InlineKeyboardButton("🔟  10 ta", callback_data="adm:setlimit_10"),
+             InlineKeyboardButton("🔄  20 ta", callback_data="adm:setlimit_20"),
+             InlineKeyboardButton("♾️  Cheksiz", callback_data="adm:setlimit_999")],
+            [InlineKeyboardButton("🔙 Orqaga", callback_data="adm:ai_menu")],
+        ])
+        await safe_answer()
+        await safe_edit(text, parse_mode="HTML", reply_markup=kb)
+        return True
+
+    if cmd.startswith("setlimit_"):
+        from main import AI_SETTINGS
+        new_limit = int(cmd.split("_", 1)[1])
+        AI_SETTINGS["image_daily_limit"] = new_limit
+        label = "♾️ Cheksiz" if new_limit >= 999 else f"{new_limit} ta"
+        await safe_answer(f"✅ Kunlik limit: {label}", alert=True)
+        # Menyuni yangilash
+        text = (
+            f"🖼 <b>Rasm Sozlamalari</b>\n\n"
+            f"📊 Yangi kunlik limit: <b>{label}</b>\n\n"
+            f"Limitni o'zgartirish:"
+        )
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("1️⃣  1 ta",  callback_data="adm:setlimit_1"),
+             InlineKeyboardButton("3️⃣  3 ta",  callback_data="adm:setlimit_3"),
+             InlineKeyboardButton("5️⃣  5 ta",  callback_data="adm:setlimit_5")],
+            [InlineKeyboardButton("🔟  10 ta", callback_data="adm:setlimit_10"),
+             InlineKeyboardButton("🔄  20 ta", callback_data="adm:setlimit_20"),
+             InlineKeyboardButton("♾️  Cheksiz", callback_data="adm:setlimit_999")],
+            [InlineKeyboardButton("🔙 Orqaga", callback_data="adm:ai_menu")],
+        ])
+        await safe_edit(text, parse_mode="HTML", reply_markup=kb)
+        return True
 
     return False
