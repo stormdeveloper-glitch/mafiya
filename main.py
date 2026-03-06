@@ -36,6 +36,7 @@ import httpx
 import base64
 from dotenv import load_dotenv
 import admin as adm
+from downloader import download_instagram_video
 
 load_dotenv()
 
@@ -2080,6 +2081,38 @@ async def join_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await safe_reply(update, context, "ℹ️ Guruh chatida /newgame buyrug'ini ishlating.")
 
 
+async def instagram_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Instagram videolarini yuklab beruvchi handler"""
+    if not update.message or not update.message.text:
+        return
+
+    url = update.message.text.strip()
+    status_msg = await update.message.reply_text("⏳ Yuklanmoqda... / Downloading...")
+    file_path = None
+
+    try:
+        file_path = await download_instagram_video(url)
+        if file_path and os.path.exists(file_path):
+            with open(file_path, 'rb') as video_file:
+                await update.message.reply_video(
+                    video=video_file,
+                    caption="✅ Yuklab olindi / Downloaded\n\n@"+(BOT_USERNAME or "")
+                )
+            await status_msg.delete()
+        else:
+            await status_msg.edit_text("❌ Videoni yuklab bo'lmadi. Havola noto'g'ri yoki profil yopiq bo'lishi mumkin.")
+    except Exception as e:
+        logger.error(f"Instagram download error: {e}")
+        await status_msg.edit_text(f"❌ Xatolik yuz berdi: {str(e)}")
+    finally:
+        # Faylni har qanday holatda ham o'chirish (try-finally orqali)
+        if file_path and os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except Exception as e:
+                logger.error(f"Error deleting temp file {file_path}: {e}")
+
+
 async def newgame(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     uid = update.effective_user.id
@@ -3262,6 +3295,13 @@ def main():
     # AI chat (Gemini) + Nano Banana rasm
     app.add_handler(CommandHandler("aireset", ai_reset))
     app.add_handler(CommandHandler("imagine", imagine))
+    
+    # Instagram Downloader Handler
+    app.add_handler(MessageHandler(
+        filters.Regex(r'(https?://(?:www\.)?instagram\.com/(?:p|reels|reel)/([^/?#&]+))'),
+        instagram_handler
+    ))
+
     app.add_handler(MessageHandler(
         filters.TEXT & filters.ChatType.PRIVATE & ~filters.COMMAND,
         ai_chat
