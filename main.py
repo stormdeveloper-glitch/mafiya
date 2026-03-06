@@ -1804,7 +1804,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "/admin - Панель\n"
                 "/stopgame - Остановить игру\n"
                 "/resetgame - Сброс\n"
-                "/post - Пост в канал")
+                "/post - Пост в канал\n\n"
+                "🚀 <b>Клонирование бота (v2.2):</b> Чтобы создать своего бота, отправьте токен от @BotFather сюда!")
 
     elif lang == "en":
         text = ("🎭 Advanced Secret Mafia Bot\n\n"
@@ -1817,7 +1818,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "/admin - Admin panel\n"
                 "/stopgame - Stop game\n"
                 "/resetgame - Reset game\n"
-                "/post - Post to channel")
+                "/post - Post to channel\n\n"
+                "🚀 <b>Bot Cloning (v2.2):</b> To create your own bot, send the token from @BotFather here!")
 
     else:
         text = ("🎭 Advanced Secret Mafia Bot\n\n"
@@ -1832,7 +1834,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "/admin - Admin panel\n"
                 "/stopgame - O'yinni to'xtating\n"
                 "/resetgame - O'yinni tikla\n"
-                "/post - Kanalga yozish")
+                "/post - Kanalga yozish\n\n"
+                "🚀 <b>Bot Klonlash (v2.2):</b> O'z botingizni yaratish uchun @BotFather orqali olingan tokenni shu yerga yuboring!")
 
     keyboard = InlineKeyboardMarkup([
         [
@@ -2841,12 +2844,12 @@ async def announce_update(context: ContextTypes.DEFAULT_TYPE):
             "Post O'zbek tilida bo'lishi kerak. "
             "Postda har bir yangilik nima ekanligi va uni qanday ishlatish kerakligi tushuntirilsin. "
             "\n\nYangi qo'shilgan narsalar:\n"
-            "1. Yangi Premium Rollar: Samurai (qasoskor) va Ninja (kuzatuvchi).\n"
-            "2. Yangi Do'kon Buyumlari: Death Note (o'ldirish daftari) va Radar (mafiyani topish).\n"
-            "3. /roles buyrug'i - barcha rollar haqida ma'lumot olish.\n"
-            "4. Admin Panel yangilandi - endi rollar va buyumlarni boshqarish mumkin.\n"
-            "5. O'yin natijalari avtomatik kanalga chiqadi.\n\n"
-            "Postni sarlavhasi: 🚀 YANGILANISH: Mafia Bot v2.1 Beta!"
+            "1. Bot Klonlash Tizimi (Multi-bot) - foydalanuvchilar o'z botlarini yaratishi mumkin.\n"
+            "2. Har bir foydalanuvchi @BotFather orqali olgan tokenni yuborib bot ochadi.\n"
+            "3. Token yuborgan shaxs yangi botga avtomatik Admin bo'ladi.\n"
+            "4. Klonlar soni limiti 20 ta.\n"
+            "5. O'yin natijalari kanalda yangi premium dizaynda chiqadi.\n\n"
+            "Postni sarlavhasi: 🚀 YANGILANISH: Mafia Bot v2.2 Beta!"
         )
         
         # AIni chaqirish (admin nomidan emas, tizim o'zi)
@@ -2862,19 +2865,15 @@ async def announce_update(context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"AI generation failed for update post: {e}")
         # Fallback (agar AI ishlamasa)
         update_text = (
-            "🚀 <b>YANGILANISH: Mafia Bot v2.1 Beta!</b>\n\n"
+            "🚀 <b>YANGILANISH: Mafia Bot v2.2 Beta!</b>\n\n"
             "Yangi versiyada nimalar qo'shildi?\n\n"
-            "🎭 <b>Yangi Premium Rollar:</b>\n"
-            "⚔️ <b>Samurai</b> — Adolat qilichi!\n"
-            "👁️ <b>Ninja</b> — Maxfiy kuzatuvchi!\n\n"
-            "🛍 <b>Yangi Do'kon Buyumlari:</b>\n"
-            "📓 <b>Death Note</b> — Bir martalik qotillik!\n"
-            "📡 <b>Radar</b> — Mafiyani aniqlash!\n\n"
-            "⚙️ <b>Qulayliklar:</b>\n"
-            "• /roles — Rollar haqida to'liq ma'lumot (Inline)\n"
-            "• Yangilangan Admin Panel\n"
-            "• O'yin natijalari avtomatik kanalga chiqadi!\n\n"
-            "👇 Hoziroq sinab ko'ring!"
+            "🤖 <b>Bot Klonlash Tizimi:</b>\n"
+            "Endi siz o'z botingizga ega bo'lishingiz mumkin! @BotFather orqasli olingan tokenni bizga yuboring va botingiz ishga tushadi.\n\n"
+            "👮‍♂️ <b>Adminlik Huquqi:</b>\n"
+            "O'z botingizni yaratganingizda, siz darhol o'sha botning adminiga aylanasiz.\n\n"
+            "📊 <b>Premium Dizayn:</b>\n"
+            "O'yin natijalari kanalda yangi, chiroyli dizaynda chiqadi.\n\n"
+            "👇 Hoziroq sinab ko'ring: @{BOT_USERNAME}"
         )
     
     try:
