@@ -46,6 +46,7 @@ ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 CHANNEL_ID = -1003882935867  # Official Channel ID
 POST_GAMES_TO_CHANNEL = True  # O'yin natijalarini kanalga yuborish
 UPDATE_VERSION = "2.1_beta"   # Versiya ID si (takrorlanmasligi uchun)
+BOT_USERNAME = None            # Bot username (post_init da o'rnatiladi)
 
 # Premium Config (Persistent state should be in DB, but for now in memory/file)
 PREMIUM_CONFIG = {
@@ -2095,12 +2096,30 @@ async def instagram_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         file_path = await download_instagram_video(url)
         if file_path and os.path.exists(file_path):
-            with open(file_path, 'rb') as video_file:
-                await update.message.reply_video(
-                    video=video_file,
-                    caption="✅ Yuklab olindi / Downloaded\n\n@"+(BOT_USERNAME or "")
-                )
-            await status_msg.delete()
+            # Fayl hajmini tekshirish (Telegram Bot API limiti 50MB)
+            file_size = os.path.getsize(file_path) / (1024 * 1024)
+            if file_size > 50:
+                await status_msg.edit_text(f"❌ Video juda katta ({file_size:.1f} MB). Telegram limiti 50 MB.")
+            else:
+                ext = os.path.splitext(file_path)[1].lower()
+                with open(file_path, 'rb') as f:
+                    if ext in ('.mp4', '.mkv', '.mov', '.webm'):
+                        await update.message.reply_video(
+                            video=f,
+                            caption="✅ Video yuklab olindi\n\n@"+(BOT_USERNAME or "")
+                        )
+                    elif ext in ('.jpg', '.jpeg', '.png', '.webp'):
+                        await update.message.reply_photo(
+                            photo=f,
+                            caption="✅ Rasm yuklab olindi\n\n@"+(BOT_USERNAME or "")
+                        )
+                    else:
+                        # Noma'lum format bo'lsa document sifatida jo'natish
+                        await update.message.reply_document(
+                            document=f,
+                            caption="✅ Fayl yuklab olindi\n\n@"+(BOT_USERNAME or "")
+                        )
+                await status_msg.delete()
         else:
             await status_msg.edit_text("❌ Videoni yuklab bo'lmadi. Havola noto'g'ri yoki profil yopiq bo'lishi mumkin.")
     except Exception as e:

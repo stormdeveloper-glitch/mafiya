@@ -2,7 +2,10 @@ import yt_dlp
 import os
 import asyncio
 import uuid
+import logging
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 async def download_instagram_video(url: str) -> Optional[str]:
     """
@@ -29,6 +32,8 @@ async def download_instagram_video(url: str) -> Optional[str]:
         },
         'nocheckcertificate': True,
         'ignoreerrors': True,
+        'socket_timeout': 30, # 30 sekund kutish
+        'retries': 3,
     }
 
     def _download():
@@ -37,7 +42,7 @@ async def download_instagram_video(url: str) -> Optional[str]:
                 info = ydl.extract_info(url, download=True)
                 return ydl.prepare_filename(info)
         except Exception as e:
-            print(f"yt-dlp error: {e}")
+            logger.error(f"yt-dlp error: {e}")
             return None
 
     try:
@@ -59,5 +64,5 @@ async def download_instagram_video(url: str) -> Optional[str]:
                 
         return file_path
     except Exception as e:
-        print(f"Download task error: {e}")
+        logger.error(f"Download task error: {e}")
         return None
