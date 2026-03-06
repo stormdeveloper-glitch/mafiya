@@ -58,7 +58,7 @@ ADMIN_ID = args.admin or int(os.getenv("ADMIN_ID", "0"))
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 CHANNEL_ID = -1003882935867  # Official Channel ID
-POST_GAMES_TO_CHANNEL = True  # O'yin natijalarini kanalga yuborish
+POST_GAMES_TO_CHANNEL = False  # O'yin natijalarini kanalga yuborish
 
 # Premium Config (Persistent state should be in DB, but for now in memory/file)
 PREMIUM_CONFIG = {
@@ -3435,7 +3435,7 @@ def main():
         # Avtomatik yangilik e'lon qilish (har safar bot restart bo'lganda)
         # Haqiqiy prod muhitda buni ehtiyotkorlik bilan qilish kerak
         # Hozircha user so'rovi bo'yicha:
-        asyncio.create_task(announce_update(application))
+        # asyncio.create_task(announce_update(application))
 
         # ── JSON sessiyalardan o'yinchilarni tiklash ──
         sessions = session_load_all()
