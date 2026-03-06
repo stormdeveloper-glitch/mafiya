@@ -5,6 +5,7 @@
 
 import logging
 import asyncio
+import html
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
@@ -113,9 +114,9 @@ def _game_status_text(game, chat_id: int) -> str:
         f"🔢 Round: {game.round}",
         f"",
         f"✅ <b>Tirik ({len(alive)}):</b>",
-    ] + [f"  • {p.name}" for p in alive]
+    ] + [f"  • {html.escape(p.name)}" for p in alive]
     if dead:
-        lines += [f"\n💀 <b>O'lgan ({len(dead)}):</b>"] + [f"  • {p.name}" for p in dead]
+        lines += [f"\n💀 <b>O'lgan ({len(dead)}):</b>"] + [f"  • {html.escape(p.name)}" for p in dead]
     return "\n".join(lines)
 
 # ================== ADMIN PANEL ==================
@@ -497,7 +498,7 @@ async def showroles(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for p in game.players.values():
         icon = "✅" if p.alive else "💀"
         role = _role_label(p.role) if p.role else "—"
-        lines.append(f"{icon} <b>{p.name}</b> — {role}")
+        lines.append(f"{icon} <b>{html.escape(p.name)}</b> — {role}")
     await update.message.reply_text("\n".join(lines), parse_mode="HTML")
 
 async def restartgame(update: Update, context: ContextTypes.DEFAULT_TYPE):

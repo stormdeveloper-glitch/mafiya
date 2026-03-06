@@ -57,6 +57,7 @@ def main():
 
             # O'chirilganlarni to'xtatish (agar configdan o'chirilsa)
             to_remove = []
+            now = time.time()
             for token, proc in processes.items():
                 if token not in active_tokens:
                     print(f"🛑 To'xtatilmoqda: {token[:10]}...")
@@ -65,8 +66,9 @@ def main():
                 
                 # Agar jarayon o'zi to'xtab qolgan bo'lsa (crash), qayta ishga tushirish
                 elif proc.poll() is not None:
-                    print(f"⚠️ Bot crash bo'ldi, qayta ishga tushirilmoqda: {token[:10]}...")
-                    processes[token] = start_bot(token, next(c.get("admin_id") for c in config if c["token"] == token))
+                    print(f"⚠️ Bot crash bo'ldi, 5 soniyadan keyin qayta ishga tushirilmoqda: {token[:10]}...")
+                    time.sleep(5) # Crash loop'dan himoya
+                    processes[token] = start_bot(token, next((c.get("admin_id") for c in config if c["token"] == token), None))
 
             for token in to_remove:
                 del processes[token]

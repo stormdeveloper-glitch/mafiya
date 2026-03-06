@@ -10,6 +10,8 @@ from datetime import datetime
 from typing import Dict, List, Optional
 import argparse
 import sys
+import html
+import re
 from telegram import (
     Update,
     InlineKeyboardButton,
@@ -42,8 +44,8 @@ from downloader import download_instagram_video
 
 load_dotenv()
 
-UPDATE_VERSION = "2.2_beta"   # Versiya ID si
-BOT_USERNAME = None            # Bot username (post_init da o'rnatiladi)
+UPDATE_VERSION = "2.2_beta"
+BOT_USERNAME = None
 
 # CLI Argumentlarni tekshirish
 parser = argparse.ArgumentParser(description="Mafia Bot Instance")
@@ -57,8 +59,6 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 CHANNEL_ID = -1003882935867  # Official Channel ID
 POST_GAMES_TO_CHANNEL = True  # O'yin natijalarini kanalga yuborish
-UPDATE_VERSION = "2.2_beta"   # Versiya ID si
-BOT_USERNAME = None            # Bot username (post_init da o'rnatiladi)
 
 # Premium Config (Persistent state should be in DB, but for now in memory/file)
 PREMIUM_CONFIG = {
@@ -1747,7 +1747,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(t(uid, "already_joined"))
             return
 
-        first_name = update.effective_user.first_name
+        first_name = html.escape(update.effective_user.first_name)
         game.players[uid] = Player(uid, first_name)
         player_count = len(game.players)
         logger.info(f"User {uid} joined game in chat {group_chat_id} via start link (total: {player_count})")
@@ -1759,7 +1759,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             f"✅ {first_name}, siz o'yinga qo'shildingiz!\n"
             f"👥 Jami o'yinchilar: {player_count}\n\n"
-            f"🎭 O'yin boshlanishini kuting..."
+            f"🎭 O'yin boshlanishini kuting...",
+            parse_mode="HTML"
         )
 
         # Guruh xabarini yangilash
@@ -1794,32 +1795,34 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = user_data.get("lang", "uz")
 
     if lang == "ru":
-        text = ("🎭 Advanced Secret Mafia Bot\n\n"
-                "📋 Команды:\n"
-                "/newgame - Начать игру\n"
-                "/lang - Сменить язык\n"
-                "/shop - Магазин\n"
-                "/balance - Баланс\n\n"
-                "👮‍♂️ Для админов:\n"
-                "/admin - Панель\n"
-                "/stopgame - Остановить игру\n"
-                "/resetgame - Сброс\n"
-                "/post - Пост в канал\n\n"
-                "🚀 <b>Клонирование бота (v2.2):</b> Чтобы создать своего бота, отправьте токен от @BotFather сюда!")
+        text = (
+            "🎌 <b>Anime Mafia — Добро пожаловать!</b> 🎌\n\n"
+            "Выбирайте своего героя и сражайтесь с друзьями в "
+            "захватывающей игре Мафия.\n\n"
+            "📜 <b>Основные команды:</b>\n"
+            "┣ <b>/newgame</b> — Начать игру в группе\n"
+            "┣ <b>/profile</b> — Профиль\n"
+            "┣ <b>/shop</b> — Магазин\n"
+            "┣ <b>/help</b> — <b>Полное руководство</b>\n\n"
+            "🚀 <b>v2.2: Клонирование (Новинка!)</b>\n"
+            "Создайте своего бота! Отправьте токен от @BotFather сюда.\n\n"
+            "🤖 <b>AI чат:</b> Просто напишите мне сообщение!"
+        )
 
     elif lang == "en":
-        text = ("🎭 Advanced Secret Mafia Bot\n\n"
-                "📋 Commands:\n"
-                "/newgame - Start game\n"
-                "/lang - Change language\n"
-                "/shop - Shop\n"
-                "/balance - Check balance\n\n"
-                "👮‍♂️ Admin commands:\n"
-                "/admin - Admin panel\n"
-                "/stopgame - Stop game\n"
-                "/resetgame - Reset game\n"
-                "/post - Post to channel\n\n"
-                "🚀 <b>Bot Cloning (v2.2):</b> To create your own bot, send the token from @BotFather here!")
+        text = (
+            "🎌 <b>Anime Mafia — Welcome!</b> 🎌\n\n"
+            "Choose your hero and battle with friends in "
+            "an exciting game of Mafia.\n\n"
+            "📜 <b>Main Commands:</b>\n"
+            "┣ <b>/newgame</b> — Start game in group\n"
+            "┣ <b>/profile</b> — Your profile\n"
+            "┣ <b>/shop</b> — Anime shop\n"
+            "┣ <b>/help</b> — <b>Complete guide</b>\n\n"
+            "🚀 <b>v2.2: Bot Cloning (New!)</b>\n"
+            "Create your own bot! Just send the token from @BotFather here.\n\n"
+            "🤖 <b>AI Chat:</b> Just send me a message!"
+        )
 
     else:
         text = (
@@ -1827,10 +1830,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Siz bu yerda o'z qahramoningizni tanlab, do'stlaringiz bilan "
             "shafqatsiz va qiziqarli mafiya o'yinini o'ynashingiz mumkin.\n\n"
             "📜 <b>Asosiy Buyruqlar:</b>\n"
-            "┣ /newgame — Guruhda yangi o'yin boshlash\n"
-            "┣ /profile — O'z statistikangizni ko'rish\n"
-            "┣ /shop — Anime buyumlarini sotib olish\n"
-            "┣ /help — <b>Barcha buyruqlar va qo'llanma</b>\n\n"
+            "┣ <b>/newgame</b> — Guruhda yangi o'yin boshlash\n"
+            "┣ <b>/profile</b> — O'z statistikangizni ko'rish\n"
+            "┣ <b>/shop</b> — Anime buyumlarini sotib olish\n"
+            "┣ <b>/help</b> — <b>Barcha buyruqlar va qo'llanma</b>\n\n"
             "🚀 <b>v2.2: Bot Klonlash (Yangilik!)</b>\n"
             "Endi siz o'z botingizni yaratishingiz mumkin! Shunchaki @BotFather orqali olingan "
             "tokenni shu yerga yuboring va shaxsiy botingizga ega bo'ling.\n\n"
@@ -1842,7 +1845,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📢 Rasmiy kanal", url="https://t.me/mafia_anime_rasmiy")]
     ])
 
-    await safe_reply(update, context, text, reply_markup=keyboard)
+    await safe_reply(update, context, text, parse_mode="HTML", reply_markup=keyboard)
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2184,9 +2187,11 @@ async def instagram_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
         return
 
-    logger.info(f"Instagram link detected: {update.message.text}")
-
-    url = update.message.text.strip()
+    url_match = re.search(r'https?://(?:www\.)?instagram\.com/(?:p|reels|reel)/[A-Za-z0-9_-]+', update.message.text)
+    if not url_match:
+        return
+    
+    url = url_match.group(0)
     status_msg = await update.message.reply_text("⏳ Yuklanmoqda... / Downloading...")
     file_path = None
 
@@ -2241,7 +2246,6 @@ async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # Token formatini tekshirish (faqat oddiy regex, chuqur tekshiruv keyinroq)
-    import re
     if not re.match(r'^\d{8,12}:[a-zA-Z0-9_-]{35}$', token):
         return # Agar shunchaki matn bo'lsa, boshqa handlerlar (AI chat) ishlasin
 
@@ -2305,7 +2309,8 @@ async def preview_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         ai_text = await _gemini_chat(0, prompt, "System")
-        full_text = f"📢 <b>KANALGA YUBORILADIGAN POST:</b>\n\n{ai_text}\n\n👇 O'z botingizni yarating: @{BOT_USERNAME}"
+        safe_ai_text = html.escape(ai_text) if ai_text else "Yangiliklar tayyorlashda xatolik."
+        full_text = f"📢 <b>KANALGA YUBORILADIGAN POST:</b>\n\n{safe_ai_text}\n\n👇 O'z botingizni yarating: @{BOT_USERNAME}"
         
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("✅ Kanalga yuborish", callback_data="adm:send_update")],
@@ -2802,7 +2807,7 @@ async def end_game(context, chat_id: int, winner: str):
     for p in game.players.values():
         r = role_emoji.get(p.role, p.role.upper() if p.role else "?")
         alive_icon = "✅" if p.alive else "💀"
-        roles_text += f"{alive_icon} {p.name} — <b>{r}</b>\n"
+        roles_text += f"{alive_icon} {html.escape(p.name)} — <b>{r}</b>\n"
 
     if winner == "mafia":
         winner_banner = (
@@ -2967,10 +2972,8 @@ async def announce_update(context: ContextTypes.DEFAULT_TYPE):
         ai_text = await _gemini_chat(0, prompt, "System")
         
         # Agar AI bo'sh qaytarsa yoki xato bo'lsa, fallback matn ishlatiladi
-        if not ai_text:
-            raise ValueError("AI empty response")
-            
-        update_text = ai_text + "\n\n👇 Hoziroq sinab ko'ring: @{BOT_USERNAME}"
+        safe_ai_text = html.escape(ai_text) if ai_text else ""
+        update_text = safe_ai_text + f"\n\n👇 Hoziroq sinab ko'ring: @{BOT_USERNAME}"
         
     except Exception as e:
         logger.error(f"AI generation failed for update post: {e}")
@@ -2984,7 +2987,7 @@ async def announce_update(context: ContextTypes.DEFAULT_TYPE):
             "O'z botingizni yaratganingizda, siz darhol o'sha botning adminiga aylanasiz.\n\n"
             "📊 <b>Premium Dizayn:</b>\n"
             "O'yin natijalari kanalda yangi, chiroyli dizaynda chiqadi.\n\n"
-            "👇 Hoziroq sinab ko'ring: @{BOT_USERNAME}"
+            f"👇 Hoziroq sinab ko'ring: @{BOT_USERNAME}"
         )
     
     try:
@@ -2998,7 +3001,7 @@ async def announce_update(context: ContextTypes.DEFAULT_TYPE):
         # Adminlarga xabar
         for admin_id in ADMINS:
             try:
-                await context.bot.send_message(chat_id=admin_id, text="✅ v2.1 Beta e'loni kanalga yuborildi!")
+                await context.bot.send_message(chat_id=admin_id, text="✅ v2.2 Beta e'loni kanalga yuborildi!")
             except: pass
     except Exception as e:
         logger.error(f"Error announcing update: {e}")
@@ -3491,9 +3494,12 @@ def main():
     app.add_handler(CommandHandler("speedgame",   adm.speedgame))
     app.add_handler(CommandHandler("showroles",   adm.showroles))
     app.add_handler(CommandHandler("restartgame", adm.restartgame))
-    app.add_handler(CallbackQueryHandler(callbacks))
-    # Help callback
+    # Help and Roles callbacks (must be before catch-all 'callbacks')
     app.add_handler(CallbackQueryHandler(help_callback, pattern=r'^help_'))
+    app.add_handler(CallbackQueryHandler(role_info_callback, pattern=r'^role_info_'))
+    app.add_handler(CallbackQueryHandler(roles_info, pattern=r'^back_to_roles$'))
+    
+    app.add_handler(CallbackQueryHandler(callbacks))
     # Rasm handler — /setphoto caption bilan (private + guruh)
     app.add_handler(MessageHandler(filters.PHOTO & filters.ChatType.PRIVATE, handle_photo))
     app.add_handler(MessageHandler(filters.PHOTO & filters.ChatType.GROUPS, handle_photo))
