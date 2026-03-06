@@ -1822,31 +1822,113 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "🚀 <b>Bot Cloning (v2.2):</b> To create your own bot, send the token from @BotFather here!")
 
     else:
-        text = ("🎭 Advanced Secret Mafia Bot\n\n"
-                "📋 Buyruqlar:\n"
-                "/newgame - O'yin boshlash\n"
-                "/lang - Tilni o'zgartirish\n"
-                "/shop - Magazin\n"
-                "/balance - Balans\n"
-                "/aireset - AI tarixni tozalash\n\n"
-                "🤖 AI bilan suhbat: oddiy xabar yozing!\n\n"
-                "👮‍♂️ Admin buyruqlari:\n"
-                "/admin - Admin panel\n"
-                "/stopgame - O'yinni to'xtating\n"
-                "/resetgame - O'yinni tikla\n"
-                "/post - Kanalga yozish\n\n"
-                "🚀 <b>Bot Klonlash (v2.2):</b> O'z botingizni yaratish uchun @BotFather orqali olingan tokenni shu yerga yuboring!")
+        text = (
+            "🎌 <b>Anime Mafia — Rasmiy Botga Xush Kelibsiz!</b> 🎌\n\n"
+            "Siz bu yerda o'z qahramoningizni tanlab, do'stlaringiz bilan "
+            "shafqatsiz va qiziqarli mafiya o'yinini o'ynashingiz mumkin.\n\n"
+            "📜 <b>Asosiy Buyruqlar:</b>\n"
+            "┣ /newgame — Guruhda yangi o'yin boshlash\n"
+            "┣ /profile — O'z statistikangizni ko'rish\n"
+            "┣ /shop — Anime buyumlarini sotib olish\n"
+            "┣ /help — <b>Barcha buyruqlar va qo'llanma</b>\n\n"
+            "🚀 <b>v2.2: Bot Klonlash (Yangilik!)</b>\n"
+            "Endi siz o'z botingizni yaratishingiz mumkin! Shunchaki @BotFather orqali olingan "
+            "tokenni shu yerga yuboring va shaxsiy botingizga ega bo'ling.\n\n"
+            "🤖 <b>AI suhbatdosh:</b> Menga shunchaki matn yozing!"
+        )
 
     keyboard = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton(
-                "📢 Bot rasmiy kanalga o'tish",
-                url="https://t.me/mafia_anime_rasmiy"
-            )
-        ]
+        [InlineKeyboardButton("📖 To'liq qo'llanma (Help)", callback_data="help_main")],
+        [InlineKeyboardButton("📢 Rasmiy kanal", url="https://t.me/mafia_anime_rasmiy")]
     ])
 
     await safe_reply(update, context, text, reply_markup=keyboard)
+
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Categorized help menu"""
+    text = (
+        "📖 <b>Mafia Bot — Qo'llanma</b>\n\n"
+        "Quyidagi kategoriyalardan birini tanlang:"
+    )
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🎮 O'yin qoidalari", callback_data="help_rules"),
+         InlineKeyboardButton("🎭 Rollar", callback_data="help_roles")],
+        [InlineKeyboardButton("🛍 Magazin & Buyumlar", callback_data="help_shop"),
+         InlineKeyboardButton("💰 Iqtisodiyot", callback_data="help_economy")],
+        [InlineKeyboardButton("🤖 Bot Klonlash (v2.2)", callback_data="help_clone")],
+        [InlineKeyboardButton("👮‍♂️ Admin Buyruqlar", callback_data="help_admin")]
+    ])
+    
+    if update.callback_query:
+        await update.callback_query.edit_message_text(text, parse_mode="HTML", reply_markup=keyboard)
+    else:
+        await update.message.reply_text(text, parse_mode="HTML", reply_markup=keyboard)
+
+
+async def help_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    data = query.data
+    uid = update.effective_user.id
+    
+    help_texts = {
+        "rules": (
+            "🎮 <b>O'yin Qoidalari</b>\n\n"
+            "1. O'yinni boshlash uchun guruhda /newgame yuboring.\n"
+            "2. Kamida 3 kishi qo'shilishi kerak.\n"
+            "3. O'yin Kecha va Kunduz bosqichlaridan iborat.\n"
+            "4. <b>Kecha:</b> Mafia va maxsus rollar o'z harakatlarini qiladi.\n"
+            "5. <b>Kunduz:</b> Hamma muhokama qiladi va bir kishini osish uchun ovoz beradi."
+        ),
+        "roles": (
+            "🎭 <b>Rollar haqida</b>\n\n"
+            "• 🤵 <b>Don:</b> Mafiya boshlig'i, Sherifga fuqaro bo'lib ko'rinadi.\n"
+            "• 🔪 <b>Mafiya:</b> Kechasi odamlarni o'ldiradi.\n"
+            "• 💚 <b>Doktor:</b> Bir kishini davolaydi.\n"
+            "• 🕵️‍♂️ <b>Sherif:</b> O'yinchilarni tekshiradi.\n"
+            "• ⚔️ <b>Samurai:</b> O'ldirishi mumkin, lekin xato qilsa o'zi ham o'ladi.\n"
+            "• 👁️ <b>Ninja:</b> Bir kishini kimlar kelishini kuzatadi."
+        ),
+        "shop": (
+            "🛍 <b>Magazin Buyumlari</b>\n\n"
+            "• 🛡 <b>Shield:</b> Kechasi mafiya hujumidan himoya.\n"
+            "• 📝 <b>Docs:</b> Sherif tekshirsa fuqaro bo'lib ko'rinish.\n"
+            "• 📓 <b>Death Note:</b> Kechasi bir kishini 100% o'ldirish.\n"
+            "• 📡 <b>Radar:</b> Mafiyani aniq topib beruvchi qurilma."
+        ),
+        "economy": (
+            "💰 <b>Iqtisodiyot va Balans</b>\n\n"
+            "• Har bir g'alaba uchun <b>+60 coin</b> beriladi.\n"
+            "• Coinga do'kondan buyumlar olishingiz mumkin.\n"
+            "• Balansni tekshirish: /balance\n"
+            "• Top o'yinchilar: /top"
+        ),
+        "clone": (
+            "🚀 <b>Bot Klonlash (v2.2)</b>\n\n"
+            "Siz o'z shaxsiy Anime Mafia botingizni ochishingiz mumkin!\n\n"
+            "1. @BotFather ga boring.\n"
+            "2. Yangi bot ochib, API Tokenini oling.\n"
+            "3. Olingan tokenni ushbu botga ( @mafia_anime_bot ) yuboring.\n"
+            "4. Botingiz avtomatik ishga tushadi va siz unda Admin bo'lasiz!"
+        ),
+        "admin": (
+            "👮‍♂️ <b>Admin Buyruqlari</b>\n\n"
+            "• /admin — Boshqaruv paneli\n"
+            "• /ban — Userni bloklash\n"
+            "• /broadcast — Barcha foydalanuvchilarga xabar\n"
+            "• /setbalance — Pul berish\n"
+            "• /stopgame — O'yinni majburiy to'xtatish"
+        )
+    }
+    
+    target = data.replace("help_", "")
+    if target == "main":
+        await help_command(update, context)
+        return
+
+    text = help_texts.get(target, "Ma'lumot topilmadi.")
+    kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Orqaga", callback_data="help_main")]])
+    await query.edit_message_text(text, parse_mode="HTML", reply_markup=kb)
 
 async def lang(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -2204,6 +2286,35 @@ async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Token saqlashda xato: {e}")
         await update.message.reply_text("❌ Xatolik yuz berdi. Iltimos keyinroq urinib ko'ring.")
+
+
+async def preview_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin uchun kanal xabarini generatsiya qilish va ko'rsatish"""
+    uid = update.effective_user.id
+    if uid != ADMIN_ID and not DB.is_admin(uid):
+        return
+
+    msg = await update.message.reply_text("⏳ AI yangiliklar postini tayyorlamoqda...")
+    
+    prompt = (
+        "Sen Mafia Botining rasmiy yangiliklar yozuvchisisan. "
+        "v2.2 Bot Klonlash yangilanishi haqida professional post yoz. "
+        "Postda klonlash imkoniyati, manager tizimi va yangi premium dizayn haqida aytilsin. "
+        "Emoji va formatlashdan keng foydalan."
+    )
+    
+    try:
+        ai_text = await _gemini_chat(0, prompt, "System")
+        full_text = f"📢 <b>KANALGA YUBORILADIGAN POST:</b>\n\n{ai_text}\n\n👇 O'z botingizni yarating: @{BOT_USERNAME}"
+        
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("✅ Kanalga yuborish", callback_data="adm:send_update")],
+            [InlineKeyboardButton("❌ Bekor qilish", callback_data="adm:back_main")]
+        ])
+        
+        await msg.edit_text(full_text, parse_mode="HTML", reply_markup=kb)
+    except Exception as e:
+        await msg.edit_text(f"❌ AI xatolik: {e}")
 
 
 async def newgame(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -3348,7 +3459,9 @@ def main():
     app.post_init = post_init
 
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("post", post_to_channel))  # New channel post command
+    app.add_handler(CommandHandler("preview", preview_update)) # Admin preview update
     app.add_handler(CommandHandler("roles", roles_info))      # New roles info command
     app.add_handler(CommandHandler("newgame", newgame))
     app.add_handler(CommandHandler("lang", lang))
@@ -3379,6 +3492,8 @@ def main():
     app.add_handler(CommandHandler("showroles",   adm.showroles))
     app.add_handler(CommandHandler("restartgame", adm.restartgame))
     app.add_handler(CallbackQueryHandler(callbacks))
+    # Help callback
+    app.add_handler(CallbackQueryHandler(help_callback, pattern=r'^help_'))
     # Rasm handler — /setphoto caption bilan (private + guruh)
     app.add_handler(MessageHandler(filters.PHOTO & filters.ChatType.PRIVATE, handle_photo))
     app.add_handler(MessageHandler(filters.PHOTO & filters.ChatType.GROUPS, handle_photo))

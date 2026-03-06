@@ -91,7 +91,8 @@ def _main_kb():
         [InlineKeyboardButton("🤖 AI Boshqaruv",      callback_data="adm:ai_menu"),
          InlineKeyboardButton("🖼 Rasm Sozlamalar",   callback_data="adm:image_menu")],
         [InlineKeyboardButton("👨‍💼 Adminlar ro'yxati", callback_data="list_admins"),
-         InlineKeyboardButton("🛑 O'yinni to'xtatish", callback_data="admin_stop_game")],
+         InlineKeyboardButton("📢 Yangilik yuborish", callback_data="adm:announce_menu")],
+        [InlineKeyboardButton("🛑 O'yinni to'xtatish", callback_data="admin_stop_game")],
     ])
 
 def _back_kb(cb="adm:back_main"):
@@ -788,6 +789,32 @@ async def handle_admin_callback(q, uid, safe_answer, safe_edit):
             [InlineKeyboardButton("🔙 Orqaga", callback_data="adm:back_main")],
         ])
         await safe_edit(status, parse_mode="HTML", reply_markup=kb)
+        return True
+
+    if cmd == "announce_menu":
+        await safe_answer()
+        await safe_edit(
+            "📢 <b>Yangiliklar Markazi (v2.2)</b>\n\n"
+            "Kanalga avtomatik yangiliklar postini yuborish uchun "
+            "avval uni ko'zdan kechirib (preview) oling.",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("👁️ Postni ko'rish (Preview)", callback_data="adm:preview_req")],
+                [InlineKeyboardButton("🔙 Orqaga", callback_data="adm:back_main")]
+            ]))
+        return True
+
+    if cmd == "preview_req":
+        await q.message.delete()
+        from main import preview_update
+        await preview_update(q, context)
+        return True
+
+    if cmd == "send_update":
+        from main import announce_update
+        await safe_answer("🚀 Yuborilmoqda...", alert=True)
+        asyncio.create_task(announce_update(context))
+        await safe_edit("✅ Yangiliklar kanalda e'lon qilindi!", reply_markup=_back_kb())
         return True
 
     if cmd == "img_toggle":
