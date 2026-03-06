@@ -2086,6 +2086,8 @@ async def instagram_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
         return
 
+    logger.info(f"Instagram link detected: {update.message.text}")
+
     url = update.message.text.strip()
     status_msg = await update.message.reply_text("⏳ Yuklanmoqda... / Downloading...")
     file_path = None
@@ -3291,16 +3293,17 @@ def main():
     # Rasm handler — /setphoto caption bilan (private + guruh)
     app.add_handler(MessageHandler(filters.PHOTO & filters.ChatType.PRIVATE, handle_photo))
     app.add_handler(MessageHandler(filters.PHOTO & filters.ChatType.GROUPS, handle_photo))
+    
+    # Instagram Downloader Handler (Must be before chat_guard and ai_chat)
+    app.add_handler(MessageHandler(
+        filters.Regex(r'https?://(?:www\.)?instagram\.com/(?:p|reels|reel)/[\w-]+'),
+        instagram_handler
+    ))
+
     app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.GROUPS, chat_guard))
     # AI chat (Gemini) + Nano Banana rasm
     app.add_handler(CommandHandler("aireset", ai_reset))
     app.add_handler(CommandHandler("imagine", imagine))
-    
-    # Instagram Downloader Handler
-    app.add_handler(MessageHandler(
-        filters.Regex(r'(https?://(?:www\.)?instagram\.com/(?:p|reels|reel)/([^/?#&]+))'),
-        instagram_handler
-    ))
 
     app.add_handler(MessageHandler(
         filters.TEXT & filters.ChatType.PRIVATE & ~filters.COMMAND,
