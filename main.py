@@ -8,6 +8,8 @@ import json
 import logging
 from datetime import datetime
 from typing import Dict, List, Optional
+import argparse
+import sys
 from telegram import (
     Update,
     InlineKeyboardButton,
@@ -40,12 +42,22 @@ from downloader import download_instagram_video
 
 load_dotenv()
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+UPDATE_VERSION = "2.2_beta"   # Versiya ID si
+BOT_USERNAME = None            # Bot username (post_init da o'rnatiladi)
+
+# CLI Argumentlarni tekshirish
+parser = argparse.ArgumentParser(description="Mafia Bot Instance")
+parser.add_argument("--token", help="Bot Token")
+parser.add_argument("--admin", type=int, help="Admin User ID")
+args, unknown = parser.parse_known_args()
+
+BOT_TOKEN = args.token or os.getenv("BOT_TOKEN")
+ADMIN_ID = args.admin or int(os.getenv("ADMIN_ID", "0"))
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
+
 CHANNEL_ID = -1003882935867  # Official Channel ID
 POST_GAMES_TO_CHANNEL = True  # O'yin natijalarini kanalga yuborish
-UPDATE_VERSION = "2.1_beta"   # Versiya ID si (takrorlanmasligi uchun)
+UPDATE_VERSION = "2.2_beta"   # Versiya ID si
 BOT_USERNAME = None            # Bot username (post_init da o'rnatiladi)
 
 # Premium Config (Persistent state should be in DB, but for now in memory/file)
@@ -2134,6 +2146,63 @@ async def instagram_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.error(f"Error deleting temp file {file_path}: {e}")
 
 
+async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Foydalanuvchi yuborgan bot tokenini qabul qilish va jsonga saqlash"""
+    uid = update.effective_user.id
+    token = update.message.text.strip()
+    
+    # Faqat private chatda ishlasin
+    if update.effective_chat.type != "private":
+        return
+
+    # Token formatini tekshirish (faqat oddiy regex, chuqur tekshiruv keyinroq)
+    import re
+    if not re.match(r'^\d{8,12}:[a-zA-Z0-9_-]{35}$', token):
+        return # Agar shunchaki matn bo'lsa, boshqa handlerlar (AI chat) ishlasin
+
+    logger.info(f"Yangi token qabul qilindi: {token[:10]}... kimdan: {uid}")
+
+    config_file = "config.json"
+    try:
+        # Hozirgi config'ni yuklash
+        if os.path.exists(config_file):
+            with open(config_file, "r") as f:
+                config = json.load(f)
+        else:
+            config = []
+
+        # Limit tekshiruvi (20 ta)
+        if len(config) >= 20:
+            await update.message.reply_text("❌ Kechirasiz, bot klonlash limiti (20 ta) to'lgan.")
+            return
+
+        # Token allaqachon bormi?
+        if any(c["token"] == token for c in config):
+            await update.message.reply_text("⚠️ Bu bot tokeni allaqachon ro'yxatdan o'tgan.")
+            return
+
+        # Yangi botni qo'shish
+        config.append({
+            "token": token,
+            "admin_id": uid,
+            "created_at": datetime.now().isoformat()
+        })
+
+        with open(config_file, "w") as f:
+            json.dump(config, f, indent=4)
+
+        await update.message.reply_text(
+            f"✅ <b>Tabriklaymiz! Botingiz navbatga qo'shildi.</b>\n\n"
+            f"👤 Siz bot admini etib tayinlandingiz.\n"
+            f"🚀 Tez orada botingiz ishga tushadi (@{token.split(':')[0]}).\n\n"
+            f"<i>Eslatma: Bu v2.2 Beta test tizimi.</i>",
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        logger.error(f"Token saqlashda xato: {e}")
+        await update.message.reply_text("❌ Xatolik yuz berdi. Iltimos keyinroq urinib ko'ring.")
+
+
 async def newgame(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     uid = update.effective_user.id
@@ -2659,11 +2728,13 @@ async def end_game(context, chat_id: int, winner: str):
     if POST_GAMES_TO_CHANNEL:
         try:
             channel_text = (
-                f"🎮 <b>YANGI O'YIN NATIJASI</b>\n\n"
-                f"🏆 G'olib: <b>{winner_label}</b>\n"
-                f"👥 O'yinchilar soni: {len(game.players)}\n"
-                f"💰 Mukofot fondi: {len(winner_ids) * WIN_REWARD} coin\n\n"
-                f"🔥 Siz ham o'ynang: @{BOT_USERNAME}"
+                f"🏆 <b>YANGI O'YIN NATIJASI</b> 🏆\n\n"
+                f"🎮 O'yin holati: <b>TUGADI</b>\n"
+                f"👤 G'olib jamoa: <b>{winner_label}</b>\n"
+                f"👥 Ishtirokchilar: <b>{len(game.players)}</b> nafar\n"
+                f"💰 Mukofot jamg'armasi: <b>{len(winner_ids) * WIN_REWARD}</b> coin\n"
+                f"📅 Sana: <b>{datetime.now().strftime('%d.%m.%Y %H:%M')}</b>\n\n"
+                f"🔥 Siz ham o'z botingizni yarating yoki o'yinga qo'shiling: @{BOT_USERNAME}"
             )
             await context.bot.send_message(CHANNEL_ID, channel_text, parse_mode="HTML")
         except Exception as e:
@@ -3323,6 +3394,12 @@ def main():
     # AI chat (Gemini) + Nano Banana rasm
     app.add_handler(CommandHandler("aireset", ai_reset))
     app.add_handler(CommandHandler("imagine", imagine))
+
+    # Token registration handler (v2.2)
+    app.add_handler(MessageHandler(
+        filters.TEXT & filters.ChatType.PRIVATE & filters.Regex(r'^\d{8,12}:[a-zA-Z0-9_-]{35}$'),
+        handle_token
+    ))
 
     app.add_handler(MessageHandler(
         filters.TEXT & filters.ChatType.PRIVATE & ~filters.COMMAND,
