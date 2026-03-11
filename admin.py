@@ -416,8 +416,9 @@ async def userinfo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     gp = d.get("games_played", 0)
     gw = d.get("games_won", 0)
     wr = round(gw / gp * 100) if gp else 0
+    name_esc = html.escape(d.get('name', '?'))
     text = (
-        f"👤 <b>{d.get('name','?')}</b>  (@{d.get('username','—')})\n"
+        f"👤 <b>{name_esc}</b>  (@{d.get('username','—')})\n"
         f"🆔 <code>{d['uid']}</code>\n"
         f"💰 Balans: <b>{d.get('money',0)} coin</b>\n"
         f"🎮 O'yinlar: {gp}  🏆 G'alaba: {gw} ({wr}%)\n"
@@ -443,8 +444,9 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lines = []
     for i, d in enumerate(top_list):
         wr = round(d["games_won"]/d["games_played"]*100) if d.get("games_played") else 0
+        name_esc = html.escape(d.get('name', '?'))
         lines.append(
-            f"{medals[i]} <b>{d.get('name','?')}</b> — "
+            f"{medals[i]} <b>{name_esc}</b> — "
             f"🏆 {d.get('games_won',0)} g'alaba ({wr}%) | 💰 {d.get('money',0)} coin"
         )
     await _safe_reply(update, context,
@@ -593,7 +595,8 @@ async def handle_admin_callback(q, uid, safe_answer, safe_edit):
         lines = []
         for i, d in enumerate(top_list):
             wr = round(d["games_won"]/d["games_played"]*100) if d.get("games_played") else 0
-            lines.append(f"{medals[i]} <b>{d.get('name','?')}</b> — {d.get('games_won',0)} g'alaba ({wr}%) | 💰 {d.get('money',0)}")
+            name_esc = html.escape(d.get('name', '?'))
+            lines.append(f"{medals[i]} <b>{name_esc}</b> — {d.get('games_won',0)} g'alaba ({wr}%) | 💰 {d.get('money',0)}")
         await safe_answer()
         await safe_edit(
             "🏆 <b>Top 10 O'yinchilar</b>\n\n" + ("\n".join(lines) or "Hali ma'lumot yo'q"),
@@ -690,7 +693,7 @@ async def handle_admin_callback(q, uid, safe_answer, safe_edit):
         lines = ["🎭 <b>Barcha rollar:</b>\n"]
         for p in game.players.values():
             icon = "✅" if p.alive else "💀"
-            lines.append(f"{icon} {p.name} — {_role_label(p.role) if p.role else '—'}")
+            lines.append(f"{icon} {html.escape(p.name)} — {_role_label(p.role) if p.role else '—'}")
         await safe_answer()
         await safe_edit("\n".join(lines), parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup([[

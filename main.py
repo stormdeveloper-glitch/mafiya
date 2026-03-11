@@ -44,7 +44,7 @@ from downloader import download_instagram_video
 
 load_dotenv()
 
-UPDATE_VERSION = "2.2_beta"
+UPDATE_VERSION = "2.2"
 BOT_USERNAME = None
 
 # CLI Argumentlarni tekshirish
@@ -67,8 +67,8 @@ PREMIUM_CONFIG = {
         "documents": {"price": 15, "enabled": True},
         "active_role": {"price": 25, "enabled": True},
         "immortality": {"price": 50, "enabled": True},
-        "death_note": {"price": 100, "enabled": True},
-        "radar": {"price": 50, "enabled": True},
+        "death_note": {"price": 200, "enabled": True},
+        "radar": {"price": 230, "enabled": True},
     },
     "roles": {
         "samurai": {"enabled": True},
@@ -99,283 +99,9 @@ WIN_REWARD = 60
 
 # ================== PERSISTENT STORAGE ==================
 
-import sqlite3
-import psycopg2
-from psycopg2.extras import RealDictCursor
+# ================== DATABASE & STORAGE ==================
+from database import DB, get_uid_data, DatabaseManager
 import io
-
-# ================== DATABASE MANAGER ==================
-
-class DatabaseManager:
-    def __init__(self):
-        self.db_url = os.getenv("DATABASE_URL")
-        self.is_pg = self.db_url is not None and self.db_url.startswith("postgres")
-        # In-memory cache: {uid: dict} — DB load kamayadi
-        self._cache: Dict[int, dict] = {}
-        self._init_db()
-
-    def _get_conn(self):
-        if self.is_pg:
-            return psycopg2.connect(self.db_url)
-        else:
-            # check_same_thread=False — asyncio single-thread, xavfsiz
-            conn = sqlite3.connect("mafia.db", check_same_thread=False)
-            conn.row_factory = sqlite3.Row
-            return conn
-
-    def _invalidate(self, uid: int):
-        """Cache dan o'chirish (update qilinganda)"""
-        self._cache.pop(uid, None)
-
-    def _init_db(self):
-        conn = self._get_conn()
-        cur = conn.cursor()
-        if self.is_pg:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    uid BIGINT PRIMARY KEY,
-                    username TEXT,
-                    name TEXT,
-                    money INT DEFAULT 100,
-                    shield INT DEFAULT 0,
-                    documents INT DEFAULT 0,
-                    active_role INT DEFAULT 0,
-                    immortality INT DEFAULT 0,
-                    games_played INT DEFAULT 0,
-                    games_won INT DEFAULT 0,
-                    last_played TEXT,
-                    photo BYTEA,
-                    lang TEXT DEFAULT 'uz'
-                );
-                CREATE TABLE IF NOT EXISTS admins (
-                    uid BIGINT PRIMARY KEY
-                );
-            """)
-        else:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    uid INTEGER PRIMARY KEY,
-                    username TEXT,
-                    name TEXT,
-                    money INTEGER DEFAULT 100,
-                    shield INTEGER DEFAULT 0,
-                    documents INTEGER DEFAULT 0,
-                    active_role INTEGER DEFAULT 0,
-                    immortality INTEGER DEFAULT 0,
-                    games_played INTEGER DEFAULT 0,
-                    games_won INTEGER DEFAULT 0,
-                    last_played TEXT,
-                    photo BLOB,
-                    lang TEXT DEFAULT 'uz'
-                );
-                CREATE TABLE IF NOT EXISTS admins (
-                    uid INTEGER PRIMARY KEY
-                );
-            """)
-        # Ban va warn jadvallari
-        if self.is_pg:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS bans (
-                    uid BIGINT PRIMARY KEY,
-                    reason TEXT,
-                    banned_by BIGINT,
-                    banned_at TEXT
-                );
-                CREATE TABLE IF NOT EXISTS warns (
-                    id SERIAL PRIMARY KEY,
-                    uid BIGINT,
-                    reason TEXT,
-                    warned_by BIGINT,
-                    warned_at TEXT
-                );
-            """)
-        else:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS bans (
-                    uid INTEGER PRIMARY KEY,
-                    reason TEXT,
-                    banned_by INTEGER,
-                    banned_at TEXT
-                );
-                CREATE TABLE IF NOT EXISTS warns (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    uid INTEGER,
-                    reason TEXT,
-                    warned_by INTEGER,
-                    warned_at TEXT
-                );
-            """)
-        conn.commit()
-        conn.close()
-
-    # ── BAN ──
-    def ban_user(self, uid: int, reason: str, banned_by: int):
-        from datetime import datetime
-        conn = self._get_conn(); cur = conn.cursor()
-        q = "INSERT INTO bans (uid, reason, banned_by, banned_at) VALUES (%s,%s,%s,%s) ON CONFLICT (uid) DO UPDATE SET reason=%s, banned_by=%s, banned_at=%s" if self.is_pg else \
-            "INSERT OR REPLACE INTO bans (uid, reason, banned_by, banned_at) VALUES (?,?,?,?)"
-        now = datetime.now().isoformat()
-        if self.is_pg:
-            cur.execute(q, (uid, reason, banned_by, now, reason, banned_by, now))
-        else:
-            cur.execute(q, (uid, reason, banned_by, now))
-        conn.commit(); conn.close()
-
-    def unban_user(self, uid: int):
-        conn = self._get_conn(); cur = conn.cursor()
-        cur.execute("DELETE FROM bans WHERE uid = %s" if self.is_pg else "DELETE FROM bans WHERE uid = ?", (uid,))
-        conn.commit(); conn.close()
-
-    def is_banned(self, uid: int) -> Optional[dict]:
-        conn = self._get_conn()
-        cur = conn.cursor(cursor_factory=RealDictCursor) if self.is_pg else conn.cursor()
-        cur.execute("SELECT * FROM bans WHERE uid = %s" if self.is_pg else "SELECT * FROM bans WHERE uid = ?", (uid,))
-        row = cur.fetchone(); conn.close()
-        return dict(row) if row else None
-
-    def get_all_bans(self) -> list:
-        conn = self._get_conn()
-        cur = conn.cursor(cursor_factory=RealDictCursor) if self.is_pg else conn.cursor()
-        cur.execute("SELECT * FROM bans ORDER BY banned_at DESC")
-        rows = cur.fetchall(); conn.close()
-        return [dict(r) for r in rows]
-
-    # ── WARN ──
-    def warn_user(self, uid: int, reason: str, warned_by: int) -> int:
-        """Warn qo'shadi, jami warn sonini qaytaradi"""
-        from datetime import datetime
-        conn = self._get_conn(); cur = conn.cursor()
-        now = datetime.now().isoformat()
-        cur.execute(
-            "INSERT INTO warns (uid, reason, warned_by, warned_at) VALUES (%s,%s,%s,%s)" if self.is_pg else
-            "INSERT INTO warns (uid, reason, warned_by, warned_at) VALUES (?,?,?,?)",
-            (uid, reason, warned_by, now)
-        )
-        conn.commit()
-        cur.execute("SELECT COUNT(*) FROM warns WHERE uid = %s" if self.is_pg else "SELECT COUNT(*) FROM warns WHERE uid = ?", (uid,))
-        count = cur.fetchone()[0]; conn.close()
-        return count
-
-    def get_warns(self, uid: int) -> list:
-        conn = self._get_conn()
-        cur = conn.cursor(cursor_factory=RealDictCursor) if self.is_pg else conn.cursor()
-        cur.execute("SELECT * FROM warns WHERE uid = %s ORDER BY warned_at DESC" if self.is_pg else
-                    "SELECT * FROM warns WHERE uid = ? ORDER BY warned_at DESC", (uid,))
-        rows = cur.fetchall(); conn.close()
-        return [dict(r) for r in rows]
-
-    def clear_warns(self, uid: int):
-        conn = self._get_conn(); cur = conn.cursor()
-        cur.execute("DELETE FROM warns WHERE uid = %s" if self.is_pg else "DELETE FROM warns WHERE uid = ?", (uid,))
-        conn.commit(); conn.close()
-
-    # ── STATS ──
-    def get_total_users(self) -> int:
-        conn = self._get_conn(); cur = conn.cursor()
-        cur.execute("SELECT COUNT(*) FROM users")
-        count = cur.fetchone()[0]; conn.close()
-        return count
-
-    def get_top_players(self, limit: int = 10) -> list:
-        conn = self._get_conn()
-        cur = conn.cursor(cursor_factory=RealDictCursor) if self.is_pg else conn.cursor()
-        cur.execute(
-            "SELECT uid, name, username, games_played, games_won, money FROM users ORDER BY games_won DESC LIMIT %s" if self.is_pg else
-            "SELECT uid, name, username, games_played, games_won, money FROM users ORDER BY games_won DESC LIMIT ?",
-            (limit,)
-        )
-        rows = cur.fetchall(); conn.close()
-        return [dict(r) for r in rows]
-
-    def search_user(self, query: str) -> list:
-        conn = self._get_conn()
-        cur = conn.cursor(cursor_factory=RealDictCursor) if self.is_pg else conn.cursor()
-        like = f"%{query}%"
-        cur.execute(
-            "SELECT uid, name, username, money, games_played, games_won FROM users WHERE name ILIKE %s OR username ILIKE %s LIMIT 10" if self.is_pg else
-            "SELECT uid, name, username, money, games_played, games_won FROM users WHERE name LIKE ? OR username LIKE ? LIMIT 10",
-            (like, like)
-        )
-        rows = cur.fetchall(); conn.close()
-        return [dict(r) for r in rows]
-
-    def get_all_uids(self) -> list:
-        conn = self._get_conn(); cur = conn.cursor()
-        cur.execute("SELECT uid FROM users")
-        rows = cur.fetchall(); conn.close()
-        return [row[0] for row in rows]
-
-    def get_user(self, uid: int) -> Optional[dict]:
-        # Cache dan qaytarish
-        if uid in self._cache:
-            return self._cache[uid]
-        conn = self._get_conn()
-        if self.is_pg:
-            cur = conn.cursor(cursor_factory=RealDictCursor)
-        else:
-            cur = conn.cursor()
-        cur.execute("SELECT * FROM users WHERE uid = %s" if self.is_pg else "SELECT * FROM users WHERE uid = ?", (uid,))
-        row = cur.fetchone()
-        conn.close()
-        if row:
-            data = dict(row)
-            self._cache[uid] = data
-            return data
-        return None
-
-    def create_user(self, uid: int, name: str = None, username: str = None):
-        conn = self._get_conn()
-        cur = conn.cursor()
-        query = """
-            INSERT INTO users (uid, name, username) 
-            VALUES (%s, %s, %s)
-            ON CONFLICT (uid) DO NOTHING
-        """ if self.is_pg else """
-            INSERT OR IGNORE INTO users (uid, name, username)
-            VALUES (?, ?, ?)
-        """
-        cur.execute(query, (uid, name, username))
-        conn.commit()
-        conn.close()
-        self._invalidate(uid)
-
-    def update_user(self, uid: int, **kwargs):
-        if not kwargs: return
-        conn = self._get_conn()
-        cur = conn.cursor()
-        cols = ", ".join([f"{k} = %s" if self.is_pg else f"{k} = ?" for k in kwargs.keys()])
-        vals = list(kwargs.values()) + [uid]
-        query = f"UPDATE users SET {cols} WHERE uid = %s" if self.is_pg else f"UPDATE users SET {cols} WHERE uid = ?"
-        cur.execute(query, vals)
-        conn.commit()
-        conn.close()
-        self._invalidate(uid)
-
-    def get_admins(self) -> set:
-        conn = self._get_conn()
-        cur = conn.cursor()
-        cur.execute("SELECT uid FROM admins")
-        rows = cur.fetchall()
-        conn.close()
-        return {row[0] for row in rows}
-
-    def add_admin(self, uid: int):
-        conn = self._get_conn()
-        cur = conn.cursor()
-        query = "INSERT INTO admins (uid) VALUES (%s) ON CONFLICT DO NOTHING" if self.is_pg else "INSERT OR IGNORE INTO admins (uid) VALUES (?)"
-        cur.execute(query, (uid,))
-        conn.commit()
-        conn.close()
-
-    def remove_admin(self, uid: int):
-        conn = self._get_conn()
-        cur = conn.cursor()
-        query = "DELETE FROM admins WHERE uid = %s" if self.is_pg else "DELETE FROM admins WHERE uid = ?"
-        cur.execute(query, (uid,))
-        conn.commit()
-        conn.close()
-
-DB = DatabaseManager()
 
 def migrate_from_json():
     """Lokal JSON ma'lumotlarini bazaga ko'chirish"""
@@ -399,7 +125,6 @@ def migrate_from_json():
                             lang=d.get("lang", "uz")
                         )
             logger.info("JSON data migrated to Database successfully.")
-            # os.rename("users.json", "users.json.bak") # Havfsizlik uchun o'chirmaymiz
         except Exception as e:
             logger.error(f"Migration error: {e}")
 
@@ -414,21 +139,6 @@ def migrate_from_json():
             logger.error(f"Admin migration error: {e}")
 
 migrate_from_json()
-
-def get_uid_data(uid: int) -> dict:
-    """Foydalanuvchi ma'lumotlarini olish — hech qachon None qaytarmaydi"""
-    if uid == 0:
-        return {"lang": "uz", "money": 0, "shield": 0, "documents": 0,
-                "active_role": 0, "immortality": 0, "games_played": 0, "games_won": 0}
-    data = DB.get_user(uid)
-    if not data:
-        DB.create_user(uid)
-        data = DB.get_user(uid)
-    # Agar hali ham None bo'lsa (DB xato) — default dict qaytarish
-    if not data:
-        return {"uid": uid, "lang": "uz", "money": 100, "shield": 0, "documents": 0,
-                "active_role": 0, "immortality": 0, "games_played": 0, "games_won": 0}
-    return data
 
 # ================== COMMAND COOLDOWN ==================
 
@@ -959,6 +669,8 @@ LANGUAGES = {
         "sheriff_result": "🕵️‍♂️ Tekshirish natijasi: {}",
         "maniac_result": "🔪 Qurbon tanlandi",
         "target_selected": "✅ Maqsad tanlandi",
+        "samurai_kill": "⚔️ Kimni qatl qilamiz? (Ehtiyot bo'ling: begunohni o'ldirsangiz, o'zingiz ham halok bo'lasiz!)",
+        "ninja_watch": "👁️ Kimni kuzatamiz?",
         "game_end": "🏁 O'yin tugadi!\n{}: {}\n💰 G'alaba: {} coin",
         "night_actions": "🌙 Kechadagi harakatlar kutilmoqda...",
         "eliminated": "💀 {} o'ldirildi!",
@@ -1344,6 +1056,24 @@ async def send_role_message(context, player: Player, game: Game):
             await context.bot.send_message(uid, text, reply_markup=InlineKeyboardMarkup(kb))
         except Exception as e:
             logger.error(f"Error sending maniac buttons to {uid}: {e}")
+
+    elif player.role == "samurai":
+        targets = [p for p in game.players.values() if p.alive and p.id != uid]
+        kb = [[InlineKeyboardButton(f"⚔️ {x.name}", callback_data=f"samurai_kill_{game.chat_id}_{x.id}")] for x in targets]
+        text += "\n\n" + t(uid, "samurai_kill")
+        try:
+            await context.bot.send_message(uid, text, reply_markup=InlineKeyboardMarkup(kb))
+        except Exception as e:
+            logger.error(f"Error sending samurai buttons to {uid}: {e}")
+
+    elif player.role == "ninja":
+        targets = [p for p in game.players.values() if p.alive and p.id != uid]
+        kb = [[InlineKeyboardButton(f"👁️ {x.name}", callback_data=f"ninja_watch_{game.chat_id}_{x.id}")] for x in targets]
+        text += "\n\n" + t(uid, "ninja_watch")
+        try:
+            await context.bot.send_message(uid, text, reply_markup=InlineKeyboardMarkup(kb))
+        except Exception as e:
+            logger.error(f"Error sending ninja buttons to {uid}: {e}")
 
     else:
         try:
@@ -1747,7 +1477,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(t(uid, "already_joined"))
             return
 
-        first_name = html.escape(update.effective_user.first_name)
+        first_name = update.effective_user.first_name
         game.players[uid] = Player(uid, first_name)
         player_count = len(game.players)
         logger.info(f"User {uid} joined game in chat {group_chat_id} via start link (total: {player_count})")
@@ -1764,7 +1494,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         # Guruh xabarini yangilash
-        names = "\n".join([f"• {p.name}" for p in game.players.values()])
+        names = "\n".join([f"• {html.escape(p.name)}" for p in game.players.values()])
         new_text = (
             f"⚔️ <b>MAFIYA O'YINi BOSHLANMOQDA!</b> ⚔️\n\n"
             f"🎌 Anime qahramonlari:\n"
@@ -2016,9 +1746,10 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang_code = d.get("lang", "uz")
     username_str = f"@{user.username}" if user.username else "—"
 
+    full_name_esc = html.escape(user.full_name)
     if lang_code == "ru":
         text = (
-            f"👤 <b>{user.full_name}</b>\n"
+            f"👤 <b>{full_name_esc}</b>\n"
             f"🔖 {username_str}\n"
             f"🆔 <code>{uid}</code>\n\n"
             f"💰 Баланс: <b>{money} монет</b>\n\n"
@@ -2035,7 +1766,7 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     elif lang_code == "en":
         text = (
-            f"👤 <b>{user.full_name}</b>\n"
+            f"👤 <b>{full_name_esc}</b>\n"
             f"🔖 {username_str}\n"
             f"🆔 <code>{uid}</code>\n\n"
             f"💰 Balance: <b>{money} coins</b>\n\n"
@@ -2052,7 +1783,7 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     else:
         text = (
-            f"👤 <b>{user.full_name}</b>\n"
+            f"👤 <b>{full_name_esc}</b>\n"
             f"🔖 {username_str}\n"
             f"🆔 <code>{uid}</code>\n\n"
             f"💰 Balans: <b>{money} coin</b>\n\n"
@@ -2428,14 +2159,52 @@ async def start_game(context, chat_id: int):
         pass
 
     game.round += 1
-    roles = role_pool(len(alive_players))
+    
+    # --- ACTIVE ROLE & ITEM LOADING ---
+    player_id_list = list(alive_players.keys())
+    # O'yinchilarning active_role statusini tekshirish
+    guaranteed_active = []
+    for pid in player_id_list:
+        udata = get_uid_data(pid)
+        if udata.get("active_role", 0) > 0:
+            guaranteed_active.append(pid)
+            DB.update_user(pid, active_role=udata["active_role"] - 1)
 
-    # Rolllarni faqat tirik o'yinchilarga berish
-    for p, r in zip(alive_players.values(), roles):
+    # Rol poolini olish
+    roles = role_pool(len(alive_players))
+    
+    # Agar guaranteed_active bo'lsa, ularga Citizen bo'lmagan rollarni berishga harakat qilish
+    assigned_roles = {}
+    if guaranteed_active:
+        # Citizen bo'lmagan rollarni ajratish
+        non_citizen_roles = [r for r in roles if r != "citizen"]
+        random.shuffle(guaranteed_active)
+        for pid in guaranteed_active:
+            if non_citizen_roles:
+                r = non_citizen_roles.pop(0)
+                assigned_roles[pid] = r
+                roles.remove(r)
+    
+    # Qolgan rollarni tarqatish
+    remaining_pids = [pid for pid in player_id_list if pid not in assigned_roles]
+    random.shuffle(remaining_pids)
+    for pid, r in zip(remaining_pids, roles):
+        assigned_roles[pid] = r
+
+    # O'yinchilarni yangilash va itemlarni yuklash
+    for pid, r in assigned_roles.items():
+        p = alive_players[pid]
         p.role = r
-        user_data = get_uid_data(p.id)
-        lang_code = user_data.get("lang", "uz")
+        udata = get_uid_data(pid)
+        lang_code = udata.get("lang", "uz")
         p.anime_character = get_anime_char(r, lang_code)
+        
+        # Itemlarni yuklash
+        p.shield = udata.get("shield", 0)
+        # Bitta o'yin uchun max 1 ta ishlatilsin (bazada kamaytirish)
+        if p.shield > 0:
+            DB.update_user(pid, shield=p.shield - 1)
+            p.shield = 1 # Faqat bitta himoya beramiz
         
         # Shield integration: if user has a shield in inventory, consume 1 and set game shield to 2
         inv_shields = user_data.get("shield", 0)
@@ -2460,7 +2229,7 @@ async def start_game(context, chat_id: int):
     uid = list(alive_players.keys())[0]
 
     # Anime uslubida o'yin boshlanishi e'loni
-    player_list = "\n".join([f"   {'👑' if p.role in ('don','mafia') else '🌟'} {p.name}" 
+    player_list = "\n".join([f"   {'👑' if p.role in ('don','mafia') else '🌟'} {html.escape(p.name)}" 
                               for p in alive_players.values()])
     start_announce = (
         f"🎌 <b>O'YIN BOSHLANDI!</b> 🎌\n\n"
@@ -2566,6 +2335,38 @@ async def process_night_actions(context, chat_id: int):
             except Exception as e:
                 logger.error(f"Error sending sheriff result to {actor}: {e}")
 
+        elif action["type"] == "samurai_kill":
+            if target.role in ("mafia", "don"):
+                killed_targets.add(t_id)
+            else:
+                # Samurai killed a good player - both die
+                killed_targets.add(t_id)
+                killed_targets.add(action["actor"])
+
+        elif action["type"] == "ninja_watch":
+            # Just mark for later report
+            pass
+
+    # Ninja reporting
+    for action in [a for a in game.night_actions if a["type"] == "ninja_watch"]:
+        ninja_id = action["actor"]
+        target_id = action["target"]
+        visitors = []
+        for a in game.night_actions:
+            if a["actor"] != ninja_id and a.get("target") == target_id:
+                visitor = game.players[a["actor"]]
+                visitors.append(f"{visitor.name} ({visitor.role.upper()})")
+        
+        report = f"👁️ <b>Kuzatuv natijasi:</b>\n"
+        if visitors:
+            report += f"Nishoningizni quyidagilar ziyorat qildi:\n" + "\n".join([f"• {v}" for v in visitors])
+        else:
+            report += f"Nishoningizni hech kim ziyorat qilmadi."
+        
+        try:
+            await context.bot.send_message(ninja_id, report, parse_mode="HTML")
+        except: pass
+
     # Process deaths
     final_dead = []
     for k_id in killed_targets:
@@ -2584,7 +2385,7 @@ async def process_night_actions(context, chat_id: int):
 
     if final_dead:
         try:
-            dead_str = ", ".join(final_dead)
+            dead_str = ", ".join([html.escape(n) for n in final_dead])
             await context.bot.send_message(
                 game.chat_id,
                 t(game.chat_id, "eliminated").format(dead_str)
@@ -2605,8 +2406,8 @@ async def process_night_actions(context, chat_id: int):
     alive_ids = [p.id for p in game.players.values() if p.alive]
     ref_uid = alive_ids[0] if alive_ids else next(iter(game.players), 0)
 
-    alive_names = "\n".join([f"   ✅ {p.name}" for p in game.players.values() if p.alive])
-    dead_names = "\n".join([f"   💀 {p.name}" for p in game.players.values() if not p.alive])
+    alive_names = "\n".join([f"   ✅ {html.escape(p.name)}" for p in game.players.values() if p.alive])
+    dead_names = "\n".join([f"   💀 {html.escape(p.name)}" for p in game.players.values() if not p.alive])
 
     day_text = (
         f"☀️ <b>TONG OTDI!</b> ☀️\n\n"
@@ -2726,7 +2527,7 @@ async def finish_voting(context, chat_id: int):
 
     group_text = (
         f"⚖️ <b>AYBLOV!</b>\n\n"
-        f"👤 Ayblanuvchi: <b>{target_name}</b>\n"
+        f"👤 Ayblanuvchi: <b>{html.escape(target_name)}</b>\n"
         f"🗳️ Unga qarshi ovozlar: <b>{target_vote_count}/{total_voters}</b>\n\n"
         f"👍 Osish: <b>0</b>  |  👎 Saqlash: <b>0</b>\n"
         f"📊 {voter_count} nafar ovoz berishi kerak\n\n"
@@ -2774,8 +2575,14 @@ async def end_game(context, chat_id: int, winner: str):
     elif winner == "maniac":
         winner_ids = [p.id for p in game.players.values() if p.role == "maniac"]
         winner_label = "🔪 MANIAC"
+    elif winner == "samurai":
+        winner_ids = [p.id for p in game.players.values() if p.role == "samurai"]
+        winner_label = "⚔️ SAMURAI"
+    elif winner == "ninja":
+        winner_ids = [p.id for p in game.players.values() if p.role == "ninja"]
+        winner_label = "🥷 NINJA"
     else:
-        winner_ids = [p.id for p in game.players.values() if p.role not in ("mafia", "don", "maniac")]
+        winner_ids = [p.id for p in game.players.values() if p.role not in ("mafia", "don", "maniac", "ninja", "samurai")]
         winner_label = "🟢 SHAHAR"
 
     # Statistika yangilash
@@ -2797,11 +2604,13 @@ async def end_game(context, chat_id: int, winner: str):
     role_emoji = {
         "don":     "👔 DON",
         "mafia":   "🔪 MAFIA",
-        "doctor":  "💚 DOCTOR",
+        "doctor":  "💊 DOCTOR",
         "killer":  "🔎 KILLER",
-        "sheriff": "🕵️‍♂️ SHERIFF",
+        "sheriff": "👮 SHERIFF",
         "maniac":  "🔪 MANIAC",
-        "citizen": "👤 FUQARO",
+        "samurai": "⚔️ SAMURAI",
+        "ninja":   "🥷 NINJA",
+        "citizen": "👨‍💼 TINCH AHOLI",
     }
     roles_text = ""
     for p in game.players.values():
@@ -3230,7 +3039,7 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         save_count = len(game.public_votes["dislike"])
         total_votes = hang_count + save_count
 
-        target_name = game.players[target].name if target in game.players else "?"
+        target_name = html.escape(game.players[target].name) if target in game.players else "?"
         alive_voters = [p for p in game.players.values() if p.alive and p.id != target]
         remaining = len(alive_voters) - total_votes
 
@@ -3347,6 +3156,46 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = f"✅ {item_data['emoji']} {item_data['name']}\n📺 {item_data['anime']}\n\n{bought_msg}"
         await safe_answer(bought_msg)
         await safe_edit(msg)
+
+    elif q.data.startswith("samurai_kill_"):
+        parts = q.data.split("_")
+        try:
+            group_chat_id = int(parts[2])
+            target = int(parts[3])
+        except (IndexError, ValueError):
+            await safe_answer()
+            return
+        game = games.get(group_chat_id)
+        if game and game.state == "night" and uid in game.players and game.players[uid].role == "samurai":
+            if target in game.players and game.players[target].alive:
+                game.night_actions = [a for a in game.night_actions if not (a["type"] == "samurai_kill" and a["actor"] == uid)]
+                game.night_actions.append({"type": "samurai_kill", "actor": uid, "target": target})
+                await safe_edit(f"⚔️ Qatl: <b>{game.players[target].name}</b>\n✅ Tanlandi!", parse_mode="HTML")
+                await safe_answer(t(uid, "target_selected"))
+            else:
+                await safe_answer()
+        else:
+            await safe_answer()
+
+    elif q.data.startswith("ninja_watch_"):
+        parts = q.data.split("_")
+        try:
+            group_chat_id = int(parts[2])
+            target = int(parts[3])
+        except (IndexError, ValueError):
+            await safe_answer()
+            return
+        game = games.get(group_chat_id)
+        if game and game.state == "night" and uid in game.players and game.players[uid].role == "ninja":
+            if target in game.players and game.players[target].alive:
+                game.night_actions = [a for a in game.night_actions if not (a["type"] == "ninja_watch" and a["actor"] == uid)]
+                game.night_actions.append({"type": "ninja_watch", "actor": uid, "target": target})
+                await safe_edit(f"👁️ Kuzatish: <b>{game.players[target].name}</b>\n✅ Tanlandi!", parse_mode="HTML")
+                await safe_answer(t(uid, "target_selected"))
+            else:
+                await safe_answer()
+        else:
+            await safe_answer()
 
     else:
         # Noma'lum callback — faqat answer qilish
