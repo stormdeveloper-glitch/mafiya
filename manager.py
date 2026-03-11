@@ -82,8 +82,19 @@ def login():
     
     # Haqiqiy Telegram OAuth tekshiruvi
     bot_token = os.getenv("BOT_TOKEN")
-    if not check_telegram_hash(data, bot_token):
-        return jsonify({"success": False, "error": "Invalid hash"}), 401
+    print(f"DEBUG: Login so'rovi keldi. BOT_TOKEN mavjudmi? {'Ha' if bot_token else 'Yoq'}")
+    
+    if not bot_token:
+        print("DEBUG: BOT_TOKEN topilmadi!")
+        return jsonify({"success": False, "error": "Serverda BOT_TOKEN sozlanmagan"}), 500
+
+    print("DEBUG: Tekshirilayotgan ma'lumotlar:", data)
+    
+    is_valid = check_telegram_hash(data, bot_token)
+    print(f"DEBUG: Hash tekshiruvi natijasi: {is_valid}")
+    
+    if not is_valid:
+        return jsonify({"success": False, "error": "Telegram tasdiqlash xatosi (Hash match failed)"}), 401
     
     uid = int(data.get('id', 0))
     user = get_uid_data(uid)
