@@ -91,6 +91,7 @@ def _main_kb():
          InlineKeyboardButton("🎮 O'yin boshqaruvi",  callback_data="adm:game_menu")],
         [InlineKeyboardButton("🤖 AI Boshqaruv",      callback_data="adm:ai_menu"),
          InlineKeyboardButton("🖼 Rasm Sozlamalar",   callback_data="adm:image_menu")],
+        [InlineKeyboardButton("☁️ Bucket Yuklovchi",  callback_data="adm:bucket_menu")],
         [InlineKeyboardButton("👨‍💼 Adminlar ro'yxati", callback_data="list_admins"),
          InlineKeyboardButton("📢 Yangilik yuborish", callback_data="adm:announce_menu")],
         [InlineKeyboardButton("🛑 O'yinni to'xtatish", callback_data="admin_stop_game")],
@@ -535,7 +536,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ================== CALLBACKS ==================
 
-async def handle_admin_callback(q, uid, safe_answer, safe_edit):
+async def handle_admin_callback(q, uid, safe_answer, safe_edit, context=None):
     """
     True — bu modulga tegishli
     False — boshqa modul ko'rib chiqsin
@@ -574,10 +575,61 @@ async def handle_admin_callback(q, uid, safe_answer, safe_edit):
 
     cmd = data[4:]
 
+    # Fayl yuklash holatini tozalash (agar boshqa sahifaga o'tsa)
+    if context and cmd != "bucket_activate" and context.user_data.get("waiting_for_bucket_file"):
+        context.user_data["waiting_for_bucket_file"] = False
+    if context and cmd not in ("upload_asset_night", "upload_asset_day") and context.user_data.get("waiting_for_asset"):
+        context.user_data.pop("waiting_for_asset", None)
+
     if cmd == "back_main":
         await safe_answer()
         await safe_edit("👨‍💼 <b>Admin Panel</b>\n\nQuyidagi bo'limlardan birini tanlang:",
             parse_mode="HTML", reply_markup=_main_kb()); return True
+
+    if cmd == "bucket_menu":
+        await safe_answer()
+        await safe_edit(
+            "☁️ <b>Bucket (S3) Yuklovchi</b>\n\n"
+            "Ushbu bo'lim orqali istalgan faylni bulutli saqlagichga (Bucket) yuklab havolasini olishingiz, hamda o'yin boshlanganda (tun bo'lganda) yoki tong otganda ko'rsatiladigan anime GIF-videolarini yangilashingiz mumkin.\n\n"
+            "Kerakli amalni tanlang:",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("📤 Oddiy fayl yuklash", callback_data="adm:bucket_activate")],
+                [InlineKeyboardButton("🌙 Tun uchun GIF yuklash", callback_data="adm:upload_asset_night")],
+                [InlineKeyboardButton("☀️ Tong uchun GIF yuklash", callback_data="adm:upload_asset_day")],
+                [InlineKeyboardButton("🔙 Orqaga", callback_data="adm:back_main")]
+            ])
+        )
+        return True
+
+    if cmd == "bucket_activate":
+        if context:
+            context.user_data["waiting_for_bucket_file"] = True
+        await safe_answer("Fayl yuborish faollashtirildi!", alert=True)
+        await safe_edit(
+            "📥 <b>Fayl yuborish faollashtirildi!</b>\n\n"
+            "Endi istalgan rasm, video, audio yoki hujjatni botga oddiy xabar sifatida yuboring. "
+            "Yuklash jarayoni tugagach, sizga havola taqdim etiladi.\n\n"
+            "<i>(Eslatma: Yuklashni bekor qilish uchun boshqa bo'limga o'ting yoki /admin deb yozing)</i>",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Bekor qilish", callback_data="adm:back_main")]])
+        )
+        return True
+
+    if cmd in ("upload_asset_night", "upload_asset_day"):
+        asset_type = "night_start" if cmd == "upload_asset_night" else "day_start"
+        if context:
+            context.user_data["waiting_for_asset"] = asset_type
+        label = "🌙 Kecha boshlanganda (Tun)" if asset_type == "night_start" else "☀️ Tong otganda (Kun)"
+        await safe_answer(f"{label} GIF yuklash faollashdi", alert=True)
+        await safe_edit(
+            f"📥 <b>{label} videoni (GIF) yuklash faollashtirildi!</b>\n\n"
+            f"Endi botga yangi GIF/videoni oddiy xabar sifatida yuboring. U avtomatik bulutga yuklanib, bazada faollashtiriladi.\n\n"
+            f"<i>(Bekor qilish uchun boshqa bo'limga o'ting yoki /admin deb yozing)</i>",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Bekor qilish", callback_data="adm:back_main")]])
+        )
+        return True
 
     if cmd == "stats":
         await safe_answer()

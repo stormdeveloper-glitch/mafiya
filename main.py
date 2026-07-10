@@ -24,6 +24,7 @@ from telegram.ext import (
     MessageHandler,
     ContextTypes,
     filters,
+    ApplicationHandlerStop,
 )
 
 # ================== LOGGING ==================
@@ -170,133 +171,133 @@ def cooldown_msg(uid: int) -> str:
 ANIME_ITEMS = {
     "uz": {
         "shield": {
-            "name": "🌀 Infinity Barrier",
+            "name": "🌀 Qalqon (Shield)",
             "emoji": "🌀",
-            "anime": "Gojo - Jujutsu Kaisen",
-            "desc": "Kechalik himoya - O'lmasizlanish",
+            "anime": "",
+            "desc": "Tungi himoya - O'limdan saqlaydi",
             "price": 20
         },
         "documents": {
-            "name": "🎭 Kitsune Mask",
+            "name": "🎭 Niqob (Mask)",
             "emoji": "🎭",
-            "anime": "Itachi - Naruto",
-            "desc": "Roli yashirish - Haqiqatni bilmaslik",
+            "anime": "",
+            "desc": "Rolingizni yashiradi",
             "price": 15
         },
         "active_role": {
-            "name": "⚡ Bankai Power",
+            "name": "⚡ Faol Rol (Active Card)",
             "emoji": "⚡",
-            "anime": "Ichigo - Bleach",
-            "desc": "Kuchini o'sishi - Kechalari ish qilish",
+            "anime": "",
+            "desc": "Tunda faol bo'ladigan rol beradi",
             "price": 25
         },
         "immortality": {
-            "name": "♾️ Gojoni Cheksizlik",
+            "name": "♾️ O'lmaslik (Immortality)",
             "emoji": "♾️",
-            "anime": "Senju Hashirama - Naruto",
-            "desc": "O'lmasizlik kuchiga boy",
+            "anime": "",
+            "desc": "O'yin davomida doimiy o'lmaslik",
             "price": 50
         },
         "death_note": {
-            "name": "📓 Death Note",
+            "name": "📓 Qotillik Daftari",
             "emoji": "📓",
-            "anime": "Light - Death Note",
-            "desc": "Bir martalik qotillik",
+            "anime": "",
+            "desc": "Bir martalik o'ldirish huquqi",
             "price": 100
         },
         "radar": {
-            "name": "📡 Dragon Radar",
+            "name": "📡 Radar",
             "emoji": "📡",
-            "anime": "Bulma - Dragon Ball",
+            "anime": "",
             "desc": "Mafiyani aniqlash (100%)",
             "price": 50
         },
     },
     "ru": {
         "shield": {
-            "name": "🌀 Infinity Barrier",
+            "name": "🌀 Щит (Shield)",
             "emoji": "🌀",
-            "anime": "Gojo - Jujutsu Kaisen",
-            "desc": "Защита ночью - Неуязвимость",
+            "anime": "",
+            "desc": "Защита ночью - спасает от смерти",
             "price": 20
         },
         "documents": {
-            "name": "🎭 Kitsune Mask",
+            "name": "🎭 Маска (Mask)",
             "emoji": "🎭",
-            "anime": "Itachi - Naruto",
-            "desc": "Скрыть роль - Анонимность",
+            "anime": "",
+            "desc": "Скрывает вашу роль",
             "price": 15
         },
         "active_role": {
-            "name": "⚡ Bankai Power",
+            "name": "⚡ Активная роль",
             "emoji": "⚡",
-            "anime": "Ichigo - Bleach",
-            "desc": "Усиление - Действие ночью",
+            "anime": "",
+            "desc": "Дает активную роль на ночь",
             "price": 25
         },
         "immortality": {
-            "name": "♾️ Вечное Бессмертие",
+            "name": "♾️ Бессмертие",
             "emoji": "♾️",
-            "anime": "Senju Hashirama - Naruto",
-            "desc": "Сила бессмертия",
+            "anime": "",
+            "desc": "Постоянное бессмертие в игре",
             "price": 50
         },
         "death_note": {
-            "name": "📓 Death Note",
+            "name": "📓 Тетрадь Смерти",
             "emoji": "📓",
-            "anime": "Light - Death Note",
-            "desc": "Убийство (один раз)",
+            "anime": "",
+            "desc": "Одноразовое право на убийство",
             "price": 100
         },
         "radar": {
-            "name": "📡 Dragon Radar",
+            "name": "📡 Радар",
             "emoji": "📡",
-            "anime": "Bulma - Dragon Ball",
-            "desc": "Найти мафию (100%)",
+            "anime": "",
+            "desc": "Обнаружение мафии (100%)",
             "price": 50
         },
     },
     "en": {
         "shield": {
-            "name": "🌀 Infinity Barrier",
+            "name": "🌀 Shield",
             "emoji": "🌀",
-            "anime": "Gojo - Jujutsu Kaisen",
-            "desc": "Night protection - Invulnerability",
+            "anime": "",
+            "desc": "Night protection - saves from death",
             "price": 20
         },
         "documents": {
-            "name": "🎭 Kitsune Mask",
+            "name": "🎭 Mask",
             "emoji": "🎭",
-            "anime": "Itachi - Naruto",
-            "desc": "Hide your role - Anonymous",
+            "anime": "",
+            "desc": "Hides your role",
             "price": 15
         },
         "active_role": {
-            "name": "⚡ Bankai Power",
+            "name": "⚡ Active Role Card",
             "emoji": "⚡",
-            "anime": "Ichigo - Bleach",
-            "desc": "Power boost - Act at night",
+            "anime": "",
+            "desc": "Gives you an active role at night",
             "price": 25
         },
         "immortality": {
-            "name": "♾️ Eternal Immortality",
+            "name": "♾️ Immortality",
             "emoji": "♾️",
-            "anime": "Senju Hashirama - Naruto",
-            "desc": "Power of eternity",
+            "anime": "",
+            "desc": "Permanent immortality in the game",
             "price": 50
         },
         "death_note": {
             "name": "📓 Death Note",
             "emoji": "📓",
-            "anime": "Light - Death Note",
-            "desc": "One-time kill",
+            "anime": "",
+            "desc": "One-time kill right",
             "price": 100
         },
         "radar": {
-            "name": "📡 Dragon Radar",
+            "name": "📡 Radar",
             "emoji": "📡",
-            "anime": "Bulma - Dragon Ball",
-            "desc": "Find Mafia (100%)",
+            "anime": "",
+            "desc": "Detect Mafia (100%)",
             "price": 50
         },
     },
@@ -803,6 +804,7 @@ class Player:
         self.shield = 1  # Hammaga default shield
         self.has_documents = False
         self.active_role = False
+        self.last_words = ""
 
 class Game:
     def __init__(self, chat_id: int):
@@ -954,9 +956,43 @@ def role_pool(n: int) -> List[str]:
     return roles
 
 def get_anime_char(role: str, lang: str = "uz") -> dict:
-    chars = ANIME_CHARACTERS.get(lang, ANIME_CHARACTERS["uz"])
-    options = chars.get(role, [{"name": "Unknown", "emoji": "❓", "anime": "Unknown", "desc": ""}])
-    return random.choice(options)
+    classic_chars = {
+        "uz": {
+            "don": {"name": "Mafiya Doni", "emoji": "👔", "anime": "Klassik", "desc": "Guruh sardori, mafiya a'zolarini boshqaradi."},
+            "mafia": {"name": "Mafiya", "emoji": "🔪", "anime": "Klassik", "desc": "Kechalari shahar fuqarolarini o'ldiradi."},
+            "doctor": {"name": "Shifokor", "emoji": "💚", "anime": "Klassik", "desc": "Kechalari bir kishini davolashi mumkin."},
+            "killer": {"name": "Qotil", "emoji": "🔎", "anime": "Klassik", "desc": "Kechalari tergov o'tkazib, mafiyani qidiradi."},
+            "sheriff": {"name": "Sherif", "emoji": "👮‍♂️", "anime": "Klassik", "desc": "Shahar adolati himoyachisi."},
+            "maniac": {"name": "Telba", "emoji": "🩸", "anime": "Klassik", "desc": "Mustaqil qotil, har kecha kimnidir o'ldiradi."},
+            "samurai": {"name": "Samuray", "emoji": "⚔️", "anime": "Klassik", "desc": "Shahar himoyachisi, jonini fido qilishga tayyor."},
+            "ninja": {"name": "Ninja", "emoji": "👁️", "anime": "Klassik", "desc": "Tunda pinhona kuzatuv olib boradi."},
+            "citizen": {"name": "Fuqaro", "emoji": "👤", "anime": "Klassik", "desc": "Tinch shahar aholisi, kunduzgi ovoz berishda ishtirok etadi."}
+        },
+        "ru": {
+            "don": {"name": "Дон Мафии", "emoji": "👔", "anime": "Классика", "desc": "Глава мафии, координирует действия банды."},
+            "mafia": {"name": "Мафия", "emoji": "🔪", "anime": "Классика", "desc": "Убивает мирных жителей ночью."},
+            "doctor": {"name": "Доктор", "emoji": "💚", "anime": "Классика", "desc": "Может спасти одного игрока ночью."},
+            "killer": {"name": "Киллер", "emoji": "🔎", "anime": "Классика", "desc": "Проводит расследования ночью."},
+            "sheriff": {"name": "Шериф", "emoji": "👮‍♂️", "anime": "Классика", "desc": "Защитник правопорядка."},
+            "maniac": {"name": "Маньяк", "emoji": "🩸", "anime": "Классика", "desc": "Одинокий убийца, убивает каждую ночь."},
+            "samurai": {"name": "Самурай", "emoji": "⚔️", "anime": "Классика", "desc": "Защитник города, готов пожертвовать собой."},
+            "ninja": {"name": "Ниндзя", "emoji": "👁️", "anime": "Классика", "desc": "Ведет скрытое наблюдение ночью."},
+            "citizen": {"name": "Мирный житель", "emoji": "👤", "anime": "Классика", "desc": "Обычный житель города, голосует днем."}
+        },
+        "en": {
+            "don": {"name": "Mafia Don", "emoji": "👔", "anime": "Classic", "desc": "Leader of the Mafia, coordinates actions."},
+            "mafia": {"name": "Mafia", "emoji": "🔪", "anime": "Classic", "desc": "Kills town members at night."},
+            "doctor": {"name": "Doctor", "emoji": "💚", "anime": "Classic", "desc": "Can heal one player at night."},
+            "killer": {"name": "Killer", "emoji": "🔎", "anime": "Classic", "desc": "Performs investigations at night."},
+            "sheriff": {"name": "Sheriff", "emoji": "👮‍♂️", "anime": "Classic", "desc": "Protector of justice."},
+            "maniac": {"name": "Maniac", "emoji": "🩸", "anime": "Classic", "desc": "Lone wolf killer, kills every night."},
+            "samurai": {"name": "Samurai", "emoji": "⚔️", "anime": "Classic", "desc": "Protector of the city, ready to sacrifice."},
+            "ninja": {"name": "Ninja", "emoji": "👁️", "anime": "Classic", "desc": "Conducts stealth observation at night."},
+            "citizen": {"name": "Civilian", "emoji": "👤", "anime": "Classic", "desc": "Ordinary town member, votes during the day."}
+        }
+    }
+    role_chars = classic_chars.get(lang, classic_chars["uz"])
+    return role_chars.get(role, {"name": "Civilian", "emoji": "👤", "anime": "Classic", "desc": "Civilian"})
 
 async def safe_send_photo(context, chat_id: int, photo_url: str, caption: str):
     """Rasm yuborishga urinadi, xato bo'lsa matn yuboradi"""
@@ -965,6 +1001,21 @@ async def safe_send_photo(context, chat_id: int, photo_url: str, caption: str):
     except Exception as e:
         logger.error(f"Error sending photo: {e}")
         await context.bot.send_message(chat_id, caption)
+
+async def safe_send_media(context, chat_id: int, url: str, caption: str):
+    """Media (video, animation yoki photo) yuborishga urinadi, xato bo'lsa oddiy matn yuboradi"""
+    try:
+        ext = url.split('.')[-1].lower() if '.' in url else ''
+        if 'video' in url or ext in ('mp4', 'mkv', 'mov', 'webm', 'gif'):
+            try:
+                await context.bot.send_animation(chat_id, url, caption=caption, parse_mode="HTML")
+            except Exception:
+                await context.bot.send_video(chat_id, url, caption=caption, parse_mode="HTML")
+        else:
+            await context.bot.send_photo(chat_id, url, caption=caption, parse_mode="HTML")
+    except Exception as e:
+        logger.error(f"Error sending media: {e}")
+        await context.bot.send_message(chat_id, caption, parse_mode="HTML")
 
 async def safe_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, **kwargs):
     """Xatolikka chidamli javob qaytarish"""
@@ -986,11 +1037,14 @@ async def send_role_message(context, player: Player, game: Game):
     lang = user_data.get("lang", "uz")
     char = player.anime_character
 
-    text = f"{char['emoji']} {char['name']} ({char['anime']})\n"
+    # Remove anime source display if it's Classic
+    source_str = f" ({char['anime']})" if char.get('anime') and char['anime'] not in ("Klassik", "Классика", "Classic") else ""
+    text = f"{char['emoji']} <b>{char['name']}</b>{source_str}\n"
     text += f"🎭 Rol: {player.role.upper()}\n"
     text += f"📖 {char['desc']}\n"
     text += f"🛡️ Himoya: {player.shield}\n\n"
 
+    # Only show abilities if there's any non-classic abilities assigned
     if char['name'] in CHARACTER_ABILITIES:
         abilities = CHARACTER_ABILITIES[char['name']]['abilities']
         if lang == "uz":
@@ -1929,28 +1983,46 @@ async def instagram_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         file_path = await download_instagram_video(url)
         if file_path and os.path.exists(file_path):
-            # Fayl hajmini tekshirish (Telegram Bot API limiti 50MB)
             file_size = os.path.getsize(file_path) / (1024 * 1024)
+            
+            # Bucket'ga yuklash
+            from storage import upload_to_bucket
+            bucket_url = upload_to_bucket(file_path)
+            
             if file_size > 50:
-                await status_msg.edit_text(f"❌ Video juda katta ({file_size:.1f} MB). Telegram limiti 50 MB.")
+                if bucket_url:
+                    await status_msg.edit_text(
+                        f"⚠️ Video hajmi {file_size:.1f} MB (Telegram limiti 50 MB).\n"
+                        f"Biroq video bulutli saqlagichimizga yuklandi! Quyidagi havola orqali ko'rishingiz va yuklab olishingiz mumkin:\n\n"
+                        f"🔗 {bucket_url}",
+                        disable_web_page_preview=False
+                    )
+                else:
+                    await status_msg.edit_text(f"❌ Video juda katta ({file_size:.1f} MB). Telegram limiti 50 MB.")
             else:
                 ext = os.path.splitext(file_path)[1].lower()
+                kb = None
+                if bucket_url:
+                    kb = InlineKeyboardMarkup([[InlineKeyboardButton("🎥 Bulutdan yuklab olish (S3 Link)", url=bucket_url)]])
+                
                 with open(file_path, 'rb') as f:
                     if ext in ('.mp4', '.mkv', '.mov', '.webm'):
                         await update.message.reply_video(
                             video=f,
-                            caption="✅ Video yuklab olindi\n\n@"+(BOT_USERNAME or "")
+                            caption="✅ Video yuklab olindi\n\n@"+(BOT_USERNAME or ""),
+                            reply_markup=kb
                         )
                     elif ext in ('.jpg', '.jpeg', '.png', '.webp'):
                         await update.message.reply_photo(
                             photo=f,
-                            caption="✅ Rasm yuklab olindi\n\n@"+(BOT_USERNAME or "")
+                            caption="✅ Rasm yuklab olindi\n\n@"+(BOT_USERNAME or ""),
+                            reply_markup=kb
                         )
                     else:
-                        # Noma'lum format bo'lsa document sifatida jo'natish
                         await update.message.reply_document(
                             document=f,
-                            caption="✅ Fayl yuklab olindi\n\n@"+(BOT_USERNAME or "")
+                            caption="✅ Fayl yuklab olindi\n\n@"+(BOT_USERNAME or ""),
+                            reply_markup=kb
                         )
                 await status_msg.delete()
         else:
@@ -1959,12 +2031,100 @@ async def instagram_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Instagram download error: {e}")
         await status_msg.edit_text(f"❌ Xatolik yuz berdi: {str(e)}")
     finally:
-        # Faylni har qanday holatda ham o'chirish (try-finally orqali)
         if file_path and os.path.exists(file_path):
             try:
                 os.remove(file_path)
             except Exception as e:
                 logger.error(f"Error deleting temp file {file_path}: {e}")
+
+
+async def admin_file_upload_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin yuborgan har qanday faylni (rasm, video, hujjat) bucket'ga yuklash"""
+    if not update.message:
+        return
+    uid = update.effective_user.id
+    if not adm.is_user_admin(uid):
+        return
+        
+    is_bucket = context.user_data.get("waiting_for_bucket_file")
+    asset_type = context.user_data.get("waiting_for_asset")
+    
+    if is_bucket or asset_type:
+        msg = update.message
+        file_obj = None
+        file_name = "file"
+        
+        # OAV turiga qarab file ID olish
+        if msg.photo:
+            file_obj = await msg.photo[-1].get_file()
+            file_name = f"photo_{file_obj.file_unique_id}.jpg"
+        elif msg.video:
+            file_obj = await msg.video.get_file()
+            file_name = msg.video.file_name or f"video_{file_obj.file_unique_id}.mp4"
+        elif msg.document:
+            file_obj = await msg.document.get_file()
+            file_name = msg.document.file_name or f"doc_{file_obj.file_unique_id}"
+        elif msg.audio:
+            file_obj = await msg.audio.get_file()
+            file_name = msg.audio.file_name or f"audio_{file_obj.file_unique_id}.mp3"
+        elif msg.voice:
+            file_obj = await msg.voice.get_file()
+            file_name = f"voice_{file_obj.file_unique_id}.ogg"
+        elif msg.animation:
+            file_obj = await msg.animation.get_file()
+            file_name = msg.animation.file_name or f"animation_{file_obj.file_unique_id}.mp4"
+        elif msg.video_note:
+            file_obj = await msg.video_note.get_file()
+            file_name = f"video_note_{file_obj.file_unique_id}.mp4"
+            
+        if not file_obj:
+            await msg.reply_text("❌ Iltimos, rasm, video, audio yoki hujjat yuboring.")
+            raise ApplicationHandlerStop()
+            
+        status = await msg.reply_text("⏳ Fayl bulutli saqlagichga (Bucket) yuklanmoqda...")
+        
+        try:
+            if not os.path.exists("downloads"):
+                os.makedirs("downloads", exist_ok=True)
+                
+            local_path = os.path.join("downloads", file_name)
+            await file_obj.download_to_drive(local_path)
+            
+            from storage import upload_to_bucket
+            import asyncio
+            loop = asyncio.get_event_loop()
+            bucket_url = await loop.run_in_executor(None, upload_to_bucket, local_path)
+            
+            if os.path.exists(local_path):
+                os.remove(local_path)
+                
+            if bucket_url:
+                if is_bucket:
+                    context.user_data["waiting_for_bucket_file"] = False
+                    await status.edit_text(
+                        f"✅ <b>Fayl muvaffaqiyatli yuklandi!</b>\n\n"
+                        f"🔗 <b>Havola (URL):</b>\n<code>{bucket_url}</code>\n\n"
+                        f"Yana yuklash uchun admin panelga kiring.",
+                        parse_mode="HTML"
+                    )
+                else:
+                    # Tun yoki kun rasmini o'rnatish
+                    DB.set_asset_url(asset_type, bucket_url)
+                    context.user_data.pop("waiting_for_asset", None)
+                    label = "🌙 Tun (Kecha)" if asset_type == "night_start" else "☀️ Tong (Kun)"
+                    await status.edit_text(
+                        f"✅ <b>{label} videosi (GIF) muvaffaqiyatli yuklandi va bazada saqlandi!</b>\n\n"
+                        f"🔗 <b>Yangi havola:</b>\n<code>{bucket_url}</code>\n\n"
+                        f"Endi o'yinda shu video ishlatiladi.",
+                        parse_mode="HTML"
+                    )
+            else:
+                await status.edit_text("❌ Faylni bulutga yuklashda xatolik yuz berdi. Sozlamalarni tekshiring.")
+        except Exception as e:
+            logger.error(f"Admin file upload error: {e}")
+            await status.edit_text(f"❌ Yuklashda kutilmagan xatolik yuz berdi: {str(e)}")
+            
+        raise ApplicationHandlerStop()
 
 
 async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2218,6 +2378,34 @@ async def start_game(context, chat_id: int):
         if p.anime_character['name'] in CHARACTER_ABILITIES:
             p.abilities = CHARACTER_ABILITIES[p.anime_character['name']]['abilities'].copy()
 
+    # Rollarni adminga shaxsiy chatda yuborish
+    try:
+        role_emojis = {
+            "don": "👔", "mafia": "🔪", "doctor": "💚", "killer": "🔎", "sheriff": "👮‍♂️", 
+            "maniac": "🩸", "samurai": "⚔️", "ninja": "👁️", "citizen": "👤"
+        }
+        role_labels = {
+            "don": "Don", "mafia": "Mafiya", "doctor": "Shifokor", "killer": "Qotil",
+            "sheriff": "Sherif", "maniac": "Telba", "samurai": "Samuray", "ninja": "Ninja",
+            "citizen": "Fuqaro"
+        }
+        admin_report_lines = []
+        for pid, r in assigned_roles.items():
+            p = alive_players[pid]
+            emoji = role_emojis.get(r, "🎭")
+            label = role_labels.get(r, r.capitalize())
+            admin_report_lines.append(f"{emoji} {label} -> {p.name}")
+        
+        admin_report = (
+            f"🎮 <b>Yangi o'yin rollari taqsimoti:</b>\n"
+            f"🏢 Guruh ID: <code>{chat_id}</code>\n\n"
+            + "\n".join(admin_report_lines)
+        )
+        for admin_id in ADMINS:
+            asyncio.create_task(context.bot.send_message(admin_id, admin_report, parse_mode="HTML"))
+    except Exception as e:
+        logger.error(f"Error preparing or sending admin roles report: {e}")
+
     # Kecha fazasi
     game.state = "night"
     session_remove(chat_id)  # O'yin boshlandi — JSON sessiya kerak emas
@@ -2228,17 +2416,17 @@ async def start_game(context, chat_id: int):
 
     uid = list(alive_players.keys())[0]
 
-    # Anime uslubida o'yin boshlanishi e'loni
-    player_list = "\n".join([f"   {'👑' if p.role in ('don','mafia') else '🌟'} {html.escape(p.name)}" 
+    # O'yin boshlanishi e'loni
+    player_list = "\n".join([f"   {'👑' if p.role in ('don','mafia') else '👤'} {html.escape(p.name)}" 
                               for p in alive_players.values()])
     start_announce = (
-        f"🎌 <b>O'YIN BOSHLANDI!</b> 🎌\n\n"
-        f"⚔️ Round <b>{game.round}</b> — Jangchilar:\n"
+        f"🎲 <b>O'YIN BOSHLANDI!</b> 🎲\n\n"
+        f"⚔️ Round <b>{game.round}</b> — O'yinchilar:\n"
         f"━━━━━━━━━━━━━━━━━━\n"
         f"{player_list}\n"
         f"━━━━━━━━━━━━━━━━━━\n"
         f"👥 Jami: <b>{len(alive_players)}</b> nafar\n\n"
-        f"📩 Har bir o'yinchi <b>shaxsiy xabar</b> oladi!"
+        f"📩 Har bir o'yinchi shaxsiy xabar orqali o'z rolini oladi!"
     )
     try:
         await context.bot.send_message(chat_id, start_announce, parse_mode="HTML")
@@ -2253,10 +2441,8 @@ async def start_game(context, chat_id: int):
         f"🔎 Tergovchi sir izlamoqda...\n\n"
         f"⏳ <b>{NIGHT_DURATION} soniya</b> — Jim turing!"
     )
-    try:
-        await context.bot.send_message(chat_id, night_text, parse_mode="HTML")
-    except Exception as e:
-        logger.error(f"Error sending night text: {e}")
+    night_url = DB.get_asset_url("night_start", NIGHT_IMAGE_URL)
+    await safe_send_media(context, chat_id, night_url, night_text)
 
     for player in alive_players.values():
         await send_role_message(context, player, game)
@@ -2390,6 +2576,16 @@ async def process_night_actions(context, chat_id: int):
                 game.chat_id,
                 t(game.chat_id, "eliminated").format(dead_str)
             )
+            # O'lgan har bir o'yinchining oxirgi gapini guruhda chiqarish
+            for k_id in killed_targets:
+                if k_id not in healed_targets:
+                    p = game.players[k_id]
+                    if p.last_words:
+                        await context.bot.send_message(
+                            game.chat_id,
+                            f"🗣️ <b>{html.escape(p.name)}</b> o'limidan oldin baqirdi: <i>\"{html.escape(p.last_words)}\"</i>",
+                            parse_mode="HTML"
+                        )
         except Exception as e:
             logger.error(f"Error sending eliminated msg: {e}")
 
@@ -2423,10 +2619,8 @@ async def process_night_actions(context, chat_id: int):
         f"⏳ {DAY_DURATION} soniya — Mafiyani toping!"
     )
 
-    try:
-        await context.bot.send_message(chat_id, day_text, parse_mode="HTML")
-    except:
-        await safe_send_photo(context, chat_id, DAY_IMAGE_URL, t(ref_uid, "day"))
+    day_url = DB.get_asset_url("day_start", DAY_IMAGE_URL)
+    await safe_send_media(context, chat_id, day_url, day_text)
 
     asyncio.create_task(_day_timer(context, chat_id))
 
@@ -2856,7 +3050,7 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await safe_edit(t(uid, "lang_set"))
 
     # Admin callbacklari (admin.py ga yo'naltiriladi)
-    if await adm.handle_admin_callback(q, uid, safe_answer, safe_edit):
+    if await adm.handle_admin_callback(q, uid, safe_answer, safe_edit, context):
         return
 
     # Shaxsiy ovoz (kunduz muhokamada)
@@ -3085,6 +3279,16 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             parse_mode="HTML"
                         )
                     )
+                    # Osilgan o'yinchining oxirgi gapini guruhda chiqarish
+                    p = game.players[target]
+                    if p.last_words:
+                        asyncio.create_task(
+                            context.bot.send_message(
+                                group_chat_id,
+                                f"🗣️ <b>{html.escape(hung_name)}</b> o'limidan oldin baqirdi: <i>\"{html.escape(p.last_words)}\"</i>",
+                                parse_mode="HTML"
+                            )
+                        )
                     try:
                         await context.bot.send_message(
                             target,
@@ -3204,7 +3408,7 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ================== CHAT GUARD ==================
 
 async def chat_guard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Kechasi guruhda yozilgan xabarlarni o'chirish"""
+    """Kechasi guruhda yozilgan xabarlarni o'chirish va tirik o'yinchilarning oxirgi xabarlarini saqlab borish"""
     if not update.message or not update.message.from_user or update.message.from_user.is_bot:
         return
     # /setphoto caption bilan yuborilgan rasmlarni o'chirmaslik
@@ -3213,6 +3417,14 @@ async def chat_guard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if caption in ("/setphoto", "setphoto"):
             return
     chat_id = update.effective_chat.id
+    uid = update.message.from_user.id
+    
+    if chat_id in games:
+        game = games[chat_id]
+        if uid in game.players and game.players[uid].alive:
+            if update.message.text and not update.message.text.startswith('/'):
+                game.players[uid].last_words = update.message.text
+
     if chat_id in games and games[chat_id].state == "night":
         try:
             await update.message.delete()
@@ -3349,6 +3561,13 @@ def main():
     app.add_handler(CallbackQueryHandler(roles_info, pattern=r'^back_to_roles$'))
     
     app.add_handler(CallbackQueryHandler(callbacks))
+    
+    # Admin bucket upload handler (Runs in group -1 to intercept admin uploads when active)
+    app.add_handler(MessageHandler(
+        filters.ChatType.PRIVATE & ~filters.COMMAND,
+        admin_file_upload_handler
+    ), group=-1)
+
     # Rasm handler — /setphoto caption bilan (private + guruh)
     app.add_handler(MessageHandler(filters.PHOTO & filters.ChatType.PRIVATE, handle_photo))
     app.add_handler(MessageHandler(filters.PHOTO & filters.ChatType.GROUPS, handle_photo))

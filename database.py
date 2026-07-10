@@ -37,6 +37,25 @@ class DatabaseManager:
         conn = self._get_conn()
         cur = conn.cursor()
         if self.is_pg:
+            # Migration check: if table 'users' exists but does not have 'uid' column
+            cur.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'users');")
+            if cur.fetchone()[0]:
+                cur.execute("SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'uid');")
+                if not cur.fetchone()[0]:
+                    cur.execute("SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'id');")
+                    if cur.fetchone()[0]:
+                        cur.execute("ALTER TABLE users RENAME COLUMN id TO uid;")
+                    else:
+                        cur.execute("ALTER TABLE users ADD COLUMN uid BIGINT PRIMARY KEY;")
+
+            # Migration check: if table 'admins' exists but does not have 'uid' column
+            cur.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'admins');")
+            if cur.fetchone()[0]:
+                cur.execute("SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'admins' AND column_name = 'uid');")
+                if not cur.fetchone()[0]:
+                    cur.execute("SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'admins' AND column_name = 'id');")
+                    if cur.fetchone()[0]:
+                        cur.execute("ALTER TABLE admins RENAME COLUMN id TO uid;")
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     uid BIGINT PRIMARY KEY,
@@ -55,6 +74,10 @@ class DatabaseManager:
                 );
                 CREATE TABLE IF NOT EXISTS admins (
                     uid BIGINT PRIMARY KEY
+                );
+                CREATE TABLE IF NOT EXISTS game_assets (
+                    key TEXT PRIMARY KEY,
+                    url TEXT NOT NULL
                 );
             """)
         else:
@@ -76,6 +99,10 @@ class DatabaseManager:
                 );
                 CREATE TABLE IF NOT EXISTS admins (
                     uid INTEGER PRIMARY KEY
+                );
+                CREATE TABLE IF NOT EXISTS game_assets (
+                    key TEXT PRIMARY KEY,
+                    url TEXT NOT NULL
                 );
             """)
         
@@ -332,6 +359,32 @@ class DatabaseManager:
         
         conn.close()
         return None
+
+    def get_asset_url(self, key: str, default: str) -> str:
+        try:
+            conn = self._get_conn()
+            cur = conn.cursor()
+            cur.execute("SELECT url FROM game_assets WHERE key = %s" if self.is_pg else "SELECT url FROM game_assets WHERE key = ?", (key,))
+            row = cur.fetchone()
+            conn.close()
+            return row[0] if row else default
+        except Exception as e:
+            logger.error(f"Error getting asset url for {key}: {e}")
+            return default
+
+    def set_asset_url(self, key: str, url: str):
+        try:
+            conn = self._get_conn()
+            cur = conn.cursor()
+            if self.is_pg:
+                cur.execute("INSERT INTO game_assets (key, url) VALUES (%s, %s) ON CONFLICT (key) DO UPDATE SET url = %s", (key, url, url))
+            else:
+                cur.execute("INSERT OR REPLACE INTO game_assets (key, url) VALUES (?, ?)", (key, url))
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            logger.error(f"Error setting asset url for {key}: {e}")
+
 
 DB = DatabaseManager()
 
