@@ -36,36 +36,9 @@ class DatabaseManager:
     def _init_db(self):
         conn = self._get_conn()
         cur = conn.cursor()
-        if self.is_pg:
-            # Migration check: if table 'users' exists but does not have 'uid' column
-            try:
-                cur.execute("SELECT uid FROM users LIMIT 0;")
-            except psycopg2.Error:
-                conn.rollback()
-                try:
-                    cur.execute("SELECT id FROM users LIMIT 0;")
-                    conn.rollback()
-                    cur.execute("ALTER TABLE users RENAME COLUMN id TO uid;")
-                except psycopg2.Error:
-                    conn.rollback()
-                    try:
-                        cur.execute("SELECT * FROM users LIMIT 0;")
-                        conn.rollback()
-                        cur.execute("ALTER TABLE users ADD COLUMN uid BIGINT PRIMARY KEY;")
-                    except psycopg2.Error:
-                        conn.rollback()
 
-            # Migration check: if table 'admins' exists but does not have 'uid' column
-            try:
-                cur.execute("SELECT uid FROM admins LIMIT 0;")
-            except psycopg2.Error:
-                conn.rollback()
-                try:
-                    cur.execute("SELECT id FROM admins LIMIT 0;")
-                    conn.rollback()
-                    cur.execute("ALTER TABLE admins RENAME COLUMN id TO uid;")
-                except psycopg2.Error:
-                    conn.rollback()
+        # ── STEP 1: Create all tables (parents first, dependents last) ──
+        if self.is_pg:
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     uid BIGINT PRIMARY KEY,
@@ -80,17 +53,100 @@ class DatabaseManager:
                     games_won INT DEFAULT 0,
                     last_played TEXT,
                     photo BYTEA,
-                    lang TEXT DEFAULT 'uz'
+                    lang TEXT DEFAULT 'uz',
+                    premium INT DEFAULT 0
                 );
+            """)
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS admins (
                     uid BIGINT PRIMARY KEY
                 );
+            """)
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS game_assets (
                     key TEXT PRIMARY KEY,
                     url TEXT NOT NULL
                 );
             """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS bans (
+                    uid BIGINT PRIMARY KEY,
+                    reason TEXT,
+                    banned_by BIGINT,
+                    banned_at TEXT
+                );
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS warns (
+                    id SERIAL PRIMARY KEY,
+                    uid BIGINT,
+                    reason TEXT,
+                    warned_by BIGINT,
+                    warned_at TEXT
+                );
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS tournaments (
+                    id SERIAL PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    prize_amount INT DEFAULT 0,
+                    status TEXT DEFAULT 'open',
+                    winner_uid BIGINT,
+                    created_at TEXT
+                );
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS tournament_participants (
+                    tournament_id INT REFERENCES tournaments(id) ON DELETE CASCADE,
+                    uid BIGINT REFERENCES users(uid),
+                    points INT DEFAULT 0,
+                    wins INT DEFAULT 0,
+                    PRIMARY KEY (tournament_id, uid)
+                );
+            """)
+            conn.commit()
+
+            # ── STEP 2: Migrations (only needed for existing databases) ──
+
+            # Migration: rename 'id' -> 'uid' in users table (legacy schema)
+            try:
+                cur.execute("SELECT uid FROM users LIMIT 0;")
+            except psycopg2.Error:
+                conn.rollback()
+                try:
+                    cur.execute("SELECT id FROM users LIMIT 0;")
+                    conn.rollback()
+                    cur.execute("ALTER TABLE users RENAME COLUMN id TO uid;")
+                    conn.commit()
+                except psycopg2.Error:
+                    conn.rollback()
+
+            # Migration: rename 'id' -> 'uid' in admins table (legacy schema)
+            try:
+                cur.execute("SELECT uid FROM admins LIMIT 0;")
+            except psycopg2.Error:
+                conn.rollback()
+                try:
+                    cur.execute("SELECT id FROM admins LIMIT 0;")
+                    conn.rollback()
+                    cur.execute("ALTER TABLE admins RENAME COLUMN id TO uid;")
+                    conn.commit()
+                except psycopg2.Error:
+                    conn.rollback()
+
+            # Migration: add 'premium' column if missing
+            try:
+                cur.execute("SELECT premium FROM users LIMIT 0;")
+            except psycopg2.Error:
+                conn.rollback()
+                try:
+                    cur.execute("ALTER TABLE users ADD COLUMN premium INT DEFAULT 0;")
+                    conn.commit()
+                except psycopg2.Error:
+                    conn.rollback()
+
         else:
+            # ── SQLite: Create tables ──
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     uid INTEGER PRIMARY KEY,
@@ -105,49 +161,21 @@ class DatabaseManager:
                     games_won INTEGER DEFAULT 0,
                     last_played TEXT,
                     photo BLOB,
-                    lang TEXT DEFAULT 'uz'
+                    lang TEXT DEFAULT 'uz',
+                    premium INTEGER DEFAULT 0
                 );
+            """)
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS admins (
                     uid INTEGER PRIMARY KEY
                 );
+            """)
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS game_assets (
                     key TEXT PRIMARY KEY,
                     url TEXT NOT NULL
                 );
             """)
-        
-        if self.is_pg:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS bans (
-                    uid BIGINT PRIMARY KEY,
-                    reason TEXT,
-                    banned_by BIGINT,
-                    banned_at TEXT
-                );
-                CREATE TABLE IF NOT EXISTS warns (
-                    id SERIAL PRIMARY KEY,
-                    uid BIGINT,
-                    reason TEXT,
-                    warned_by BIGINT,
-                    warned_at TEXT
-                );
-                CREATE TABLE IF NOT EXISTS tournaments (
-                    id SERIAL PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    prize_amount INT DEFAULT 0,
-                    status TEXT DEFAULT 'open', -- open, active, finished
-                    winner_uid BIGINT,
-                    created_at TEXT
-                );
-                CREATE TABLE IF NOT EXISTS tournament_participants (
-                    tournament_id INT REFERENCES tournaments(id) ON DELETE CASCADE,
-                    uid BIGINT REFERENCES users(uid),
-                    points INT DEFAULT 0,
-                    wins INT DEFAULT 0,
-                    PRIMARY KEY (tournament_id, uid)
-                );
-            """)
-        else:
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS bans (
                     uid INTEGER PRIMARY KEY,
@@ -155,6 +183,8 @@ class DatabaseManager:
                     banned_by INTEGER,
                     banned_at TEXT
                 );
+            """)
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS warns (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     uid INTEGER,
@@ -162,6 +192,8 @@ class DatabaseManager:
                     warned_by INTEGER,
                     warned_at TEXT
                 );
+            """)
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS tournaments (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
@@ -170,6 +202,8 @@ class DatabaseManager:
                     winner_uid INTEGER,
                     created_at TEXT
                 );
+            """)
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS tournament_participants (
                     tournament_id INTEGER,
                     uid INTEGER,
@@ -180,7 +214,19 @@ class DatabaseManager:
                     FOREIGN KEY (uid) REFERENCES users(uid)
                 );
             """)
-        conn.commit()
+            conn.commit()
+
+            # ── SQLite Migrations ──
+            # Migration: add 'premium' column if missing
+            try:
+                cur.execute("SELECT premium FROM users LIMIT 0;")
+            except sqlite3.OperationalError:
+                try:
+                    cur.execute("ALTER TABLE users ADD COLUMN premium INTEGER DEFAULT 0;")
+                    conn.commit()
+                except sqlite3.OperationalError:
+                    pass
+
         conn.close()
 
     def ban_user(self, uid: int, reason: str, banned_by: int):
