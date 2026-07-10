@@ -37,8 +37,8 @@ class DatabaseManager:
         conn = self._get_conn()
         cur = conn.cursor()
 
-        # ── STEP 1: Create all tables (parents first, dependents last) ──
         if self.is_pg:
+            # ── STEP 1: Create parent tables ──
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     uid BIGINT PRIMARY KEY,
@@ -68,6 +68,47 @@ class DatabaseManager:
                     url TEXT NOT NULL
                 );
             """)
+            conn.commit()
+
+            # ── STEP 2: Migrations (BEFORE dependent tables!) ──
+            # Migration: rename 'id' -> 'uid' in users table (legacy schema)
+            try:
+                cur.execute("SELECT uid FROM users LIMIT 0;")
+            except psycopg2.Error:
+                conn.rollback()
+                try:
+                    cur.execute("SELECT id FROM users LIMIT 0;")
+                    conn.rollback()
+                    cur.execute("ALTER TABLE users RENAME COLUMN id TO uid;")
+                    conn.commit()
+                except psycopg2.Error:
+                    conn.rollback()
+
+            # Migration: rename 'id' -> 'uid' in admins table (legacy schema)
+            try:
+                cur.execute("SELECT uid FROM admins LIMIT 0;")
+            except psycopg2.Error:
+                conn.rollback()
+                try:
+                    cur.execute("SELECT id FROM admins LIMIT 0;")
+                    conn.rollback()
+                    cur.execute("ALTER TABLE admins RENAME COLUMN id TO uid;")
+                    conn.commit()
+                except psycopg2.Error:
+                    conn.rollback()
+
+            # Migration: add 'premium' column if missing
+            try:
+                cur.execute("SELECT premium FROM users LIMIT 0;")
+            except psycopg2.Error:
+                conn.rollback()
+                try:
+                    cur.execute("ALTER TABLE users ADD COLUMN premium INT DEFAULT 0;")
+                    conn.commit()
+                except psycopg2.Error:
+                    conn.rollback()
+
+            # ── STEP 3: Create dependent tables (AFTER uid migration!) ──
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS bans (
                     uid BIGINT PRIMARY KEY,
@@ -106,47 +147,8 @@ class DatabaseManager:
             """)
             conn.commit()
 
-            # ── STEP 2: Migrations (only needed for existing databases) ──
-
-            # Migration: rename 'id' -> 'uid' in users table (legacy schema)
-            try:
-                cur.execute("SELECT uid FROM users LIMIT 0;")
-            except psycopg2.Error:
-                conn.rollback()
-                try:
-                    cur.execute("SELECT id FROM users LIMIT 0;")
-                    conn.rollback()
-                    cur.execute("ALTER TABLE users RENAME COLUMN id TO uid;")
-                    conn.commit()
-                except psycopg2.Error:
-                    conn.rollback()
-
-            # Migration: rename 'id' -> 'uid' in admins table (legacy schema)
-            try:
-                cur.execute("SELECT uid FROM admins LIMIT 0;")
-            except psycopg2.Error:
-                conn.rollback()
-                try:
-                    cur.execute("SELECT id FROM admins LIMIT 0;")
-                    conn.rollback()
-                    cur.execute("ALTER TABLE admins RENAME COLUMN id TO uid;")
-                    conn.commit()
-                except psycopg2.Error:
-                    conn.rollback()
-
-            # Migration: add 'premium' column if missing
-            try:
-                cur.execute("SELECT premium FROM users LIMIT 0;")
-            except psycopg2.Error:
-                conn.rollback()
-                try:
-                    cur.execute("ALTER TABLE users ADD COLUMN premium INT DEFAULT 0;")
-                    conn.commit()
-                except psycopg2.Error:
-                    conn.rollback()
-
         else:
-            # ── SQLite: Create tables ──
+            # ── SQLite: Create all tables ──
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     uid INTEGER PRIMARY KEY,
@@ -216,8 +218,7 @@ class DatabaseManager:
             """)
             conn.commit()
 
-            # ── SQLite Migrations ──
-            # Migration: add 'premium' column if missing
+            # SQLite Migration: add 'premium' column if missing
             try:
                 cur.execute("SELECT premium FROM users LIMIT 0;")
             except sqlite3.OperationalError:
