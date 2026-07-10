@@ -38,24 +38,34 @@ class DatabaseManager:
         cur = conn.cursor()
         if self.is_pg:
             # Migration check: if table 'users' exists but does not have 'uid' column
-            cur.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'users');")
-            if cur.fetchone()[0]:
-                cur.execute("SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'uid');")
-                if not cur.fetchone()[0]:
-                    cur.execute("SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'id');")
-                    if cur.fetchone()[0]:
-                        cur.execute("ALTER TABLE users RENAME COLUMN id TO uid;")
-                    else:
+            try:
+                cur.execute("SELECT uid FROM users LIMIT 0;")
+            except psycopg2.Error:
+                conn.rollback()
+                try:
+                    cur.execute("SELECT id FROM users LIMIT 0;")
+                    conn.rollback()
+                    cur.execute("ALTER TABLE users RENAME COLUMN id TO uid;")
+                except psycopg2.Error:
+                    conn.rollback()
+                    try:
+                        cur.execute("SELECT * FROM users LIMIT 0;")
+                        conn.rollback()
                         cur.execute("ALTER TABLE users ADD COLUMN uid BIGINT PRIMARY KEY;")
+                    except psycopg2.Error:
+                        conn.rollback()
 
             # Migration check: if table 'admins' exists but does not have 'uid' column
-            cur.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'admins');")
-            if cur.fetchone()[0]:
-                cur.execute("SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'admins' AND column_name = 'uid');")
-                if not cur.fetchone()[0]:
-                    cur.execute("SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'admins' AND column_name = 'id');")
-                    if cur.fetchone()[0]:
-                        cur.execute("ALTER TABLE admins RENAME COLUMN id TO uid;")
+            try:
+                cur.execute("SELECT uid FROM admins LIMIT 0;")
+            except psycopg2.Error:
+                conn.rollback()
+                try:
+                    cur.execute("SELECT id FROM admins LIMIT 0;")
+                    conn.rollback()
+                    cur.execute("ALTER TABLE admins RENAME COLUMN id TO uid;")
+                except psycopg2.Error:
+                    conn.rollback()
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     uid BIGINT PRIMARY KEY,
