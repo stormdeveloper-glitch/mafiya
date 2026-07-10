@@ -1,6 +1,5 @@
 # advanced_secret_mafia_bot.py
-# PROFESSIONAL PRODUCTION VERSION - ANIME THEMED MAFIA GAME
-# RESTART TRIGGER: 2026-03-01 22:31
+# PROFESSIONAL PRODUCTION VERSION - CLASSIC MAFIA GAME
 
 import asyncio
 import random
@@ -69,7 +68,7 @@ PREMIUM_CONFIG = {
         "active_role": {"price": 25, "enabled": True},
         "immortality": {"price": 50, "enabled": True},
         "death_note": {"price": 200, "enabled": True},
-        "radar": {"price": 230, "enabled": True},
+        "radar": {"price": 5000, "enabled": True},
     },
     "roles": {
         "samurai": {"enabled": True},
@@ -166,482 +165,148 @@ def cooldown_msg(uid: int) -> str:
     }
     return msgs.get(lang, msgs["uz"])
 
-# ================== ANIME SHOP ITEMS ==================
+# ================== SHOP ITEMS ==================
 
-ANIME_ITEMS = {
+SHOP_ITEMS = {
     "uz": {
         "shield": {
             "name": "🌀 Qalqon (Shield)",
             "emoji": "🌀",
-            "anime": "",
+            "type": "",
             "desc": "Tungi himoya - O'limdan saqlaydi",
             "price": 20
         },
         "documents": {
             "name": "🎭 Niqob (Mask)",
             "emoji": "🎭",
-            "anime": "",
+            "type": "",
             "desc": "Rolingizni yashiradi",
             "price": 15
         },
         "active_role": {
             "name": "⚡ Faol Rol (Active Card)",
             "emoji": "⚡",
-            "anime": "",
+            "type": "",
             "desc": "Tunda faol bo'ladigan rol beradi",
             "price": 25
         },
         "immortality": {
             "name": "♾️ O'lmaslik (Immortality)",
             "emoji": "♾️",
-            "anime": "",
+            "type": "",
             "desc": "O'yin davomida doimiy o'lmaslik",
             "price": 50
         },
         "death_note": {
             "name": "📓 Qotillik Daftari",
             "emoji": "📓",
-            "anime": "",
+            "type": "",
             "desc": "Bir martalik o'ldirish huquqi",
             "price": 100
         },
         "radar": {
             "name": "📡 Radar",
             "emoji": "📡",
-            "anime": "",
+            "type": "",
             "desc": "Mafiyani aniqlash (100%)",
-            "price": 50
+            "price": 5000
         },
     },
     "ru": {
         "shield": {
             "name": "🌀 Щит (Shield)",
             "emoji": "🌀",
-            "anime": "",
+            "type": "",
             "desc": "Защита ночью - спасает от смерти",
             "price": 20
         },
         "documents": {
             "name": "🎭 Маска (Mask)",
             "emoji": "🎭",
-            "anime": "",
+            "type": "",
             "desc": "Скрывает вашу роль",
             "price": 15
         },
         "active_role": {
             "name": "⚡ Активная роль",
             "emoji": "⚡",
-            "anime": "",
+            "type": "",
             "desc": "Дает активную роль на ночь",
             "price": 25
         },
         "immortality": {
             "name": "♾️ Бессмертие",
             "emoji": "♾️",
-            "anime": "",
+            "type": "",
             "desc": "Постоянное бессмертие в игре",
             "price": 50
         },
         "death_note": {
             "name": "📓 Тетрадь Смерти",
             "emoji": "📓",
-            "anime": "",
+            "type": "",
             "desc": "Одноразовое право на убийство",
             "price": 100
         },
         "radar": {
             "name": "📡 Радар",
             "emoji": "📡",
-            "anime": "",
+            "type": "",
             "desc": "Обнаружение мафии (100%)",
-            "price": 50
+            "price": 5000
         },
     },
     "en": {
         "shield": {
             "name": "🌀 Shield",
             "emoji": "🌀",
-            "anime": "",
+            "type": "",
             "desc": "Night protection - saves from death",
             "price": 20
         },
         "documents": {
             "name": "🎭 Mask",
             "emoji": "🎭",
-            "anime": "",
+            "type": "",
             "desc": "Hides your role",
             "price": 15
         },
         "active_role": {
             "name": "⚡ Active Role Card",
             "emoji": "⚡",
-            "anime": "",
+            "type": "",
             "desc": "Gives you an active role at night",
             "price": 25
         },
         "immortality": {
             "name": "♾️ Immortality",
             "emoji": "♾️",
-            "anime": "",
+            "type": "",
             "desc": "Permanent immortality in the game",
             "price": 50
         },
         "death_note": {
             "name": "📓 Death Note",
             "emoji": "📓",
-            "anime": "",
+            "type": "",
             "desc": "One-time kill right",
             "price": 100
         },
         "radar": {
             "name": "📡 Radar",
             "emoji": "📡",
-            "anime": "",
+            "type": "",
             "desc": "Detect Mafia (100%)",
-            "price": 50
+            "price": 5000
         },
     },
 }
 
 # ================== CHARACTER UNIQUE ABILITIES ==================
 
-CHARACTER_ABILITIES = {
-    # ... (existing) ...
-    # New Characters for Samurai
-    "Zoro Roronoa": {
-        "abilities": [
-            "⚔️ Santoryu - Three Sword Style",
-            "🌪️ Tatsumaki - Dragon Twister",
-            "👺 Ashura - Demon Spirit",
-            "💪 Training - Constant improvement"
-        ]
-    },
-    # New Characters for Ninja
-    "Kakashi Hatake": {
-        "abilities": [
-            "👁️ Sharingan - Copy Ninja",
-            "⚡ Chidori - Lightning Blade",
-            "🐶 Summoning - Ninja Hounds",
-            "🧠 Strategy - Genius Tactician"
-        ]
-    },
-    # New Characters for Sheriff
-    "Rengoku Kyojuro": {
-        "abilities": [
-            "🔥 Flame Breathing - Esoteric Art",
-            "❤️ Burning Heart - Justice",
-            "🛡️ Ninth Form - Purgatory",
-            "👁️ Spiritual Core - See truth"
-        ]
-    },
-    "All Might": {
-        "abilities": [
-            "👊 Detroit Smash - Power",
-            "🦸 Symbol of Peace - Inspiration",
-            "🇺🇸 United States of Smash - Ultimate",
-            "💨 One For All - Speed"
-        ]
-    },
-    "Erwin Smith": {
-        "abilities": [
-            "⚔️ Sasageyo - Dedication",
-            "🧠 Strategy - Formation",
-            "🐎 Charge - Leadership",
-            "👁️ Truth Seeker - Investigation"
-        ]
-    },
-    # New Characters for Maniac
-    "Hisoka Morow": {
-        "abilities": [
-            "🃏 Bungee Gum - Elastic love",
-            "🎭 Texture Surprise - Deception",
-            "🎪 Magician - Deadly cards",
-            "🩸 Bloodlust - Killing intent"
-        ]
-    },
-    "Light Yagami": {
-        "abilities": [
-            "📓 Death Note - Write names",
-            "🍎 Shinigami Eyes - See lifespan",
-            "🧠 Genius - Manipulation",
-            "⌚ Watch Piece - Hidden paper"
-        ]
-    },
-    "Toga Himiko": {
-        "abilities": [
-            "💉 Transform - Blood ingestion",
-            "🔪 Knife Skills - Agility",
-            "❤️ Obsession - Love is pain",
-            "🎭 Stealth - Vanishing"
-        ]
-    },
-    # Existing
-    "Gojo Satoru": {
-        "abilities": [
-            "♾️ Infinity Barrier - Absolute protection",
-            "🔵 Blue - Attraction technique",
-            "⚫ White - Repulsion technique",
-            "🌟 Domain Expansion - Unlimited Void"
-        ]
-    },
-    "Itachi Uchiha": {
-        "abilities": [
-            "👁️ Tsukuyomi - Infinite torture",
-            "🔥 Amaterasu - Black flames",
-            "🦅 Susanoo - Perfect defense",
-            "🕷️ Genjutsu - Mind control"
-        ]
-    },
-    "Aizen Sosuke": {
-        "abilities": [
-            "🌀 Kyoka Suigetsu - Perfect illusion",
-            "⚔️ Zanpakuto - Soul sword",
-            "👑 Hogyoku - Transcendence",
-            "💫 Reiryoku - Spiritual power"
-        ]
-    },
-    "Sukuna": {
-        "abilities": [
-            "🌊 Domain Expansion - Malevolent Shrine",
-            "✂️ Dismantle - Slashing technique",
-            "📉 Cleave - Devastating attack",
-            "🔥 Fire Technique - Immense power"
-        ]
-    },
-    "Pain": {
-        "abilities": [
-            "👁️ Rinnegan - All seeing eyes",
-            "🌍 Universal Pull - Attraction",
-            "💥 Planetary Devastation - Mass destruction",
-            "🗡️ Six Paths - Multiple bodies"
-        ]
-    },
-    "Deidara": {
-        "abilities": [
-            "💣 Clay Explosives - Various sizes",
-            "🛩️ Flying Clay Bird - Transportation",
-            "🎨 Art is Explosion - Philosophy",
-            "✨ C4 - Microscopic bombs"
-        ]
-    },
-    "Tony Tony Chopper": {
-        "abilities": [
-            "🦌 Human form - Medical knowledge",
-            "💪 Heavy Point - Strength boost",
-            "🧲 Magnet form - Metal control",
-            "❄️ Rumble Balls - Transformation"
-        ]
-    },
-    "Orihime Inoue": {
-        "abilities": [
-            "✨ Tsubaki - Offensive power",
-            "🛡️ Santen Kesshun - Defense",
-            "🔄 Shun'o - Speed boost",
-            "💚 Healing - Restore health"
-        ]
-    },
-    "Sakura Haruno": {
-        "abilities": [
-            "💚 Healing Jutsu - Restore health",
-            "💪 Strength boost - Powerful strikes",
-            "🧠 Intelligence - Strategic thinking",
-            "🏥 Medical Ninjutsu - Advanced healing"
-        ]
-    },
-    "L Lawliet": {
-        "abilities": [
-            "🔎 Deduction - Logical analysis",
-            "🧠 Strategy - Perfect planning",
-            "🎵 Mind Games - Psychological warfare",
-            "📊 Analysis - Information gathering"
-        ]
-    },
-    "Toji Fushiguro": {
-        "abilities": [
-            "⚔️ Cursed Weapons - Enhanced tools",
-            "💪 Physical Prowess - Superhuman strength",
-            "🔪 Assassination Techniques - Deadly accuracy",
-            "🛡️ Combat Experience - Master fighter"
-        ]
-    },
-    "Shikamaru Nara": {
-        "abilities": [
-            "🎲 Shadow Possession - Control opponents",
-            "🌑 Shadow Clone - Create duplicates",
-            "🧠 Strategy - Brilliant planning",
-            "📐 Geometry - Spatial awareness"
-        ]
-    },
-    "Tanjiro Kamado": {
-        "abilities": [
-            "🔥 Water Breathing - Flowing techniques",
-            "💨 Dance of the Fire God - Devastating attacks",
-            "👃 Smell Detection - Track enemies",
-            "❤️ Willpower - Never give up"
-        ]
-    },
-    "Luffy": {
-        "abilities": [
-            "🏴‍☠️ Gear Second - Speed boost",
-            "💪 Gear Third - Power technique",
-            "⚫ Gear Fourth - Ultimate form",
-            "🤜 Gum Gum Fruit - Rubber body"
-        ]
-    },
-    "Ichigo Kurosaki": {
-        "abilities": [
-            "⚡ Bankai - Ultimate soul form",
-            "🗡️ Zangetsu - Spirit sword",
-            "👻 Hollow Powers - Mask transformation",
-            "🔥 Getsuga Tensho - Destructive wave"
-        ]
-    },
-    "Naruto Uzumaki": {
-        "abilities": [
-            "🍜 Rasengan - Spinning sphere",
-            "🦊 Nine-Tailed Fox - Beast power",
-            "🔴 Bijuu Mode - Full power",
-            "😤 Never Give Up - Determination"
-        ]
-    },
-}
+CHARACTER_ABILITIES = {}
 
-# ================== ANIME CHARACTERS ==================
-
-ANIME_CHARACTERS = {
-    "uz": {
-        "samurai": [
-            {"name": "Zoro Roronoa", "emoji": "⚔️", "anime": "One Piece", "desc": "Qat'iyatli jangchi"},
-        ],
-        "ninja": [
-            {"name": "Kakashi Hatake", "emoji": "👁️", "anime": "Naruto", "desc": "Nusxa ko'chiruvchi"},
-        ],
-        "sheriff": [
-            {"name": "Rengoku Kyojuro", "emoji": "🔥", "anime": "Demon Slayer", "desc": "Adolatli Sherif"},
-            {"name": "All Might", "emoji": "🦸", "anime": "MHA", "desc": "Tinchlik ramzi"},
-            {"name": "Erwin Smith", "emoji": "⚔️", "anime": "AOT", "desc": "Haqiqat izlovchi"},
-        ],
-        "maniac": [
-            {"name": "Hisoka Morow", "emoji": "🃏", "anime": "HxH", "desc": "Telba qotil"},
-            {"name": "Light Yagami", "emoji": "📓", "anime": "Death Note", "desc": "Yangi dunyo xudosi"},
-            {"name": "Toga Himiko", "emoji": "💉", "anime": "MHA", "desc": "Qonxo'r qiz"},
-        ],
-        "don": [
-            {"name": "Gojo Satoru", "emoji": "👔", "anime": "Jujutsu Kaisen", "desc": "Qudratli rahbar"},
-            {"name": "Itachi Uchiha", "emoji": "🕵️", "anime": "Naruto", "desc": "Jimjit don"},
-            {"name": "Aizen Sosuke", "emoji": "⚫", "anime": "Bleach", "desc": "Sehrli rahbar"},
-        ],
-        "mafia": [
-            {"name": "Sukuna", "emoji": "👹", "anime": "Jujutsu Kaisen", "desc": "Kuchli qotil"},
-            {"name": "Pain", "emoji": "💜", "anime": "Naruto", "desc": "Ko'p ko'zli"},
-            {"name": "Deidara", "emoji": "💣", "anime": "Naruto", "desc": "Portlovchi"},
-        ],
-        "doctor": [
-            {"name": "Tony Tony Chopper", "emoji": "🦌", "anime": "One Piece", "desc": "Tabib"},
-            {"name": "Orihime Inoue", "emoji": "💫", "anime": "Bleach", "desc": "Davolovchi"},
-            {"name": "Sakura Haruno", "emoji": "🌸", "anime": "Naruto", "desc": "Shifokor"},
-        ],
-        "killer": [
-            {"name": "L Lawliet", "emoji": "🔎", "anime": "Death Note", "desc": "Aqlli tergovchi"},
-            {"name": "Toji Fushiguro", "emoji": "⚔️", "anime": "Jujutsu Kaisen", "desc": "Kasbiy qotil"},
-            {"name": "Shikamaru Nara", "emoji": "🎲", "anime": "Naruto", "desc": "Strategist"},
-        ],
-        "citizen": [
-            {"name": "Tanjiro Kamado", "emoji": "🔥", "anime": "Demon Slayer", "desc": "Jasur yo'lovchi"},
-            {"name": "Luffy", "emoji": "🏴‍☠️", "anime": "One Piece", "desc": "Shodmon kapitan"},
-            {"name": "Ichigo Kurosaki", "emoji": "⚪", "anime": "Bleach", "desc": "Oddiy talaba"},
-            {"name": "Naruto Uzumaki", "emoji": "🍜", "anime": "Naruto", "desc": "Yosh ninja"},
-        ],
-    },
-    "ru": {
-        "samurai": [
-            {"name": "Zoro Roronoa", "emoji": "⚔️", "anime": "One Piece", "desc": "Решительный воин"},
-        ],
-        "ninja": [
-            {"name": "Kakashi Hatake", "emoji": "👁️", "anime": "Naruto", "desc": "Копирующий ниндзя"},
-        ],
-        "sheriff": [
-            {"name": "Rengoku Kyojuro", "emoji": "🔥", "anime": "Demon Slayer", "desc": "Справедливый шериф"},
-            {"name": "All Might", "emoji": "🦸", "anime": "MHA", "desc": "Символ мира"},
-            {"name": "Erwin Smith", "emoji": "⚔️", "anime": "AOT", "desc": "Искатель истины"},
-        ],
-        "maniac": [
-            {"name": "Hisoka Morow", "emoji": "🃏", "anime": "HxH", "desc": "Безумный убийца"},
-            {"name": "Light Yagami", "emoji": "📓", "anime": "Death Note", "desc": "Бог нового мира"},
-            {"name": "Toga Himiko", "emoji": "💉", "anime": "MHA", "desc": "Кровавая леди"},
-        ],
-        "don": [
-            {"name": "Gojo Satoru", "emoji": "👔", "anime": "Jujutsu Kaisen", "desc": "Могущественный лидер"},
-            {"name": "Itachi Uchiha", "emoji": "🕵️", "anime": "Naruto", "desc": "Молчаливый босс"},
-            {"name": "Aizen Sosuke", "emoji": "⚫", "anime": "Bleach", "desc": "Мистический лидер"},
-        ],
-        "mafia": [
-            {"name": "Sukuna", "emoji": "👹", "anime": "Jujutsu Kaisen", "desc": "Жестокий убийца"},
-            {"name": "Pain", "emoji": "💜", "anime": "Naruto", "desc": "Всевидящие глаза"},
-            {"name": "Deidara", "emoji": "💣", "anime": "Naruto", "desc": "Взрывчатый художник"},
-        ],
-        "doctor": [
-            {"name": "Tony Tony Chopper", "emoji": "🦌", "anime": "One Piece", "desc": "Переродившийся врач"},
-            {"name": "Orihime Inoue", "emoji": "💫", "anime": "Bleach", "desc": "Сила исцеления"},
-            {"name": "Sakura Haruno", "emoji": "🌸", "anime": "Naruto", "desc": "Гениальный медик"},
-        ],
-        "killer": [
-            {"name": "L Lawliet", "emoji": "🔎", "anime": "Death Note", "desc": "Блестящий детектив"},
-            {"name": "Toji Fushiguro", "emoji": "⚔️", "anime": "Jujutsu Kaisen", "desc": "Профессиональный киллер"},
-            {"name": "Shikamaru Nara", "emoji": "🎲", "anime": "Naruto", "desc": "Стратегический гений"},
-        ],
-        "citizen": [
-            {"name": "Tanjiro Kamado", "emoji": "🔥", "anime": "Demon Slayer", "desc": "Решительный охотник"},
-            {"name": "Luffy", "emoji": "🏴‍☠️", "anime": "One Piece", "desc": "Весёлый капитан"},
-            {"name": "Ichigo Kurosaki", "emoji": "⚪", "anime": "Bleach", "desc": "Обычный студент"},
-            {"name": "Naruto Uzumaki", "emoji": "🍜", "anime": "Naruto", "desc": "Духовный ниндзя"},
-        ],
-    },
-    "en": {
-        "samurai": [
-            {"name": "Zoro Roronoa", "emoji": "⚔️", "anime": "One Piece", "desc": "Determined Warrior"},
-        ],
-        "ninja": [
-            {"name": "Kakashi Hatake", "emoji": "👁️", "anime": "Naruto", "desc": "Copy Ninja"},
-        ],
-        "sheriff": [
-            {"name": "Rengoku Kyojuro", "emoji": "🔥", "anime": "Demon Slayer", "desc": "Justice Sheriff"},
-            {"name": "All Might", "emoji": "🦸", "anime": "MHA", "desc": "Symbol of Peace"},
-            {"name": "Erwin Smith", "emoji": "⚔️", "anime": "AOT", "desc": "Truth Seeker"},
-        ],
-        "maniac": [
-            {"name": "Hisoka Morow", "emoji": "🃏", "anime": "HxH", "desc": "Crazy Killer"},
-            {"name": "Light Yagami", "emoji": "📓", "anime": "Death Note", "desc": "God of New World"},
-            {"name": "Toga Himiko", "emoji": "💉", "anime": "MHA", "desc": "Bloodthirsty"},
-        ],
-        "don": [
-            {"name": "Gojo Satoru", "emoji": "👔", "anime": "Jujutsu Kaisen", "desc": "Powerful Leader"},
-            {"name": "Itachi Uchiha", "emoji": "🕵️", "anime": "Naruto", "desc": "Silent Don"},
-            {"name": "Aizen Sosuke", "emoji": "⚫", "anime": "Bleach", "desc": "Mystical Leader"},
-        ],
-        "mafia": [
-            {"name": "Sukuna", "emoji": "👹", "anime": "Jujutsu Kaisen", "desc": "Cruel Killer"},
-            {"name": "Pain", "emoji": "💜", "anime": "Naruto", "desc": "All-Seeing Eyes"},
-            {"name": "Deidara", "emoji": "💣", "anime": "Naruto", "desc": "Explosive Artist"},
-        ],
-        "doctor": [
-            {"name": "Tony Tony Chopper", "emoji": "🦌", "anime": "One Piece", "desc": "Reborn Doctor"},
-            {"name": "Orihime Inoue", "emoji": "💫", "anime": "Bleach", "desc": "Healing Power"},
-            {"name": "Sakura Haruno", "emoji": "🌸", "anime": "Naruto", "desc": "Brilliant Medic"},
-        ],
-        "killer": [
-            {"name": "L Lawliet", "emoji": "🔎", "anime": "Death Note", "desc": "Brilliant Detective"},
-            {"name": "Toji Fushiguro", "emoji": "⚔️", "anime": "Jujutsu Kaisen", "desc": "Professional Killer"},
-            {"name": "Shikamaru Nara", "emoji": "🎲", "anime": "Naruto", "desc": "Strategic Genius"},
-        ],
-        "citizen": [
-            {"name": "Tanjiro Kamado", "emoji": "🔥", "anime": "Demon Slayer", "desc": "Determined Slayer"},
-            {"name": "Luffy", "emoji": "🏴‍☠️", "anime": "One Piece", "desc": "Cheerful Captain"},
-            {"name": "Ichigo Kurosaki", "emoji": "⚪", "anime": "Bleach", "desc": "Ordinary Student"},
-            {"name": "Naruto Uzumaki", "emoji": "🍜", "anime": "Naruto", "desc": "Spirited Ninja"},
-        ],
-    },
-}
+# ================== GAME CONFIGS ==================
 
 # ================== LANGUAGE ==================
 
@@ -799,8 +464,7 @@ class Player:
         self.name = name
         self.alive = True
         self.role: Optional[str] = None
-        self.anime_character: Optional[dict] = None
-        self.abilities: List[str] = []
+        self.character: Optional[dict] = None
         self.shield = 1  # Hammaga default shield
         self.has_documents = False
         self.active_role = False
@@ -955,44 +619,44 @@ def role_pool(n: int) -> List[str]:
     random.shuffle(roles)
     return roles
 
-def get_anime_char(role: str, lang: str = "uz") -> dict:
+def get_role_details(role: str, lang: str = "uz") -> dict:
     classic_chars = {
         "uz": {
-            "don": {"name": "Mafiya Doni", "emoji": "👔", "anime": "Klassik", "desc": "Guruh sardori, mafiya a'zolarini boshqaradi."},
-            "mafia": {"name": "Mafiya", "emoji": "🔪", "anime": "Klassik", "desc": "Kechalari shahar fuqarolarini o'ldiradi."},
-            "doctor": {"name": "Shifokor", "emoji": "💚", "anime": "Klassik", "desc": "Kechalari bir kishini davolashi mumkin."},
-            "killer": {"name": "Qotil", "emoji": "🔎", "anime": "Klassik", "desc": "Kechalari tergov o'tkazib, mafiyani qidiradi."},
-            "sheriff": {"name": "Sherif", "emoji": "👮‍♂️", "anime": "Klassik", "desc": "Shahar adolati himoyachisi."},
-            "maniac": {"name": "Telba", "emoji": "🩸", "anime": "Klassik", "desc": "Mustaqil qotil, har kecha kimnidir o'ldiradi."},
-            "samurai": {"name": "Samuray", "emoji": "⚔️", "anime": "Klassik", "desc": "Shahar himoyachisi, jonini fido qilishga tayyor."},
-            "ninja": {"name": "Ninja", "emoji": "👁️", "anime": "Klassik", "desc": "Tunda pinhona kuzatuv olib boradi."},
-            "citizen": {"name": "Fuqaro", "emoji": "👤", "anime": "Klassik", "desc": "Tinch shahar aholisi, kunduzgi ovoz berishda ishtirok etadi."}
+            "don": {"name": "Mafiya Doni", "emoji": "👔", "type": "Klassik", "desc": "Guruh sardori, mafiya a'zolarini boshqaradi."},
+            "mafia": {"name": "Mafiya", "emoji": "🔪", "type": "Klassik", "desc": "Kechalari shahar fuqarolarini o'ldiradi."},
+            "doctor": {"name": "Shifokor", "emoji": "💚", "type": "Klassik", "desc": "Kechalari bir kishini davolashi mumkin."},
+            "killer": {"name": "Qotil", "emoji": "🔎", "type": "Klassik", "desc": "Kechalari tergov o'tkazib, mafiyani qidiradi."},
+            "sheriff": {"name": "Sherif", "emoji": "👮‍♂️", "type": "Klassik", "desc": "Shahar adolati himoyachisi."},
+            "maniac": {"name": "Telba", "emoji": "🩸", "type": "Klassik", "desc": "Mustaqil qotil, har kecha kimnidir o'ldiradi."},
+            "samurai": {"name": "Samuray", "emoji": "⚔️", "type": "Klassik", "desc": "Shahar himoyachisi, jonini fido qilishga tayyor."},
+            "ninja": {"name": "Ninja", "emoji": "👁️", "type": "Klassik", "desc": "Tunda pinhona kuzatuv olib boradi."},
+            "citizen": {"name": "Fuqaro", "emoji": "👤", "type": "Klassik", "desc": "Tinch shahar aholisi, kunduzgi ovoz berishda ishtirok etadi."}
         },
         "ru": {
-            "don": {"name": "Дон Мафии", "emoji": "👔", "anime": "Классика", "desc": "Глава мафии, координирует действия банды."},
-            "mafia": {"name": "Мафия", "emoji": "🔪", "anime": "Классика", "desc": "Убивает мирных жителей ночью."},
-            "doctor": {"name": "Доктор", "emoji": "💚", "anime": "Классика", "desc": "Может спасти одного игрока ночью."},
-            "killer": {"name": "Киллер", "emoji": "🔎", "anime": "Классика", "desc": "Проводит расследования ночью."},
-            "sheriff": {"name": "Шериф", "emoji": "👮‍♂️", "anime": "Классика", "desc": "Защитник правопорядка."},
-            "maniac": {"name": "Маньяк", "emoji": "🩸", "anime": "Классика", "desc": "Одинокий убийца, убивает каждую ночь."},
-            "samurai": {"name": "Самурай", "emoji": "⚔️", "anime": "Классика", "desc": "Защитник города, готов пожертвовать собой."},
-            "ninja": {"name": "Ниндзя", "emoji": "👁️", "anime": "Классика", "desc": "Ведет скрытое наблюдение ночью."},
-            "citizen": {"name": "Мирный житель", "emoji": "👤", "anime": "Классика", "desc": "Обычный житель города, голосует днем."}
+            "don": {"name": "Дон Мафии", "emoji": "👔", "type": "Классика", "desc": "Глава мафии, координирует действия банды."},
+            "mafia": {"name": "Мафия", "emoji": "🔪", "type": "Классика", "desc": "Убивает мирных жителей ночью."},
+            "doctor": {"name": "Доктор", "emoji": "💚", "type": "Классика", "desc": "Может спасти одного игрока ночью."},
+            "killer": {"name": "Киллер", "emoji": "🔎", "type": "Классика", "desc": "Проводит расследования ночью."},
+            "sheriff": {"name": "Шериф", "emoji": "👮‍♂️", "type": "Классика", "desc": "Защитник правопорядка."},
+            "maniac": {"name": "Маньяк", "emoji": "🩸", "type": "Классика", "desc": "Одинокий убийца, убивает каждую ночь."},
+            "samurai": {"name": "Самурай", "emoji": "⚔️", "type": "Классика", "desc": "Защитник города, готов пожертвовать собой."},
+            "ninja": {"name": "Ниндзя", "emoji": "👁️", "type": "Классика", "desc": "Ведет скрытое наблюдение ночью."},
+            "citizen": {"name": "Мирный житель", "emoji": "👤", "type": "Классика", "desc": "Обычный житель города, голосует днем."}
         },
         "en": {
-            "don": {"name": "Mafia Don", "emoji": "👔", "anime": "Classic", "desc": "Leader of the Mafia, coordinates actions."},
-            "mafia": {"name": "Mafia", "emoji": "🔪", "anime": "Classic", "desc": "Kills town members at night."},
-            "doctor": {"name": "Doctor", "emoji": "💚", "anime": "Classic", "desc": "Can heal one player at night."},
-            "killer": {"name": "Killer", "emoji": "🔎", "anime": "Classic", "desc": "Performs investigations at night."},
-            "sheriff": {"name": "Sheriff", "emoji": "👮‍♂️", "anime": "Classic", "desc": "Protector of justice."},
-            "maniac": {"name": "Maniac", "emoji": "🩸", "anime": "Classic", "desc": "Lone wolf killer, kills every night."},
-            "samurai": {"name": "Samurai", "emoji": "⚔️", "anime": "Classic", "desc": "Protector of the city, ready to sacrifice."},
-            "ninja": {"name": "Ninja", "emoji": "👁️", "anime": "Classic", "desc": "Conducts stealth observation at night."},
-            "citizen": {"name": "Civilian", "emoji": "👤", "anime": "Classic", "desc": "Ordinary town member, votes during the day."}
+            "don": {"name": "Mafia Don", "emoji": "👔", "type": "Classic", "desc": "Leader of the Mafia, coordinates actions."},
+            "mafia": {"name": "Mafia", "emoji": "🔪", "type": "Classic", "desc": "Kills town members at night."},
+            "doctor": {"name": "Doctor", "emoji": "💚", "type": "Classic", "desc": "Can heal one player at night."},
+            "killer": {"name": "Killer", "emoji": "🔎", "type": "Classic", "desc": "Performs investigations at night."},
+            "sheriff": {"name": "Sheriff", "emoji": "👮‍♂️", "type": "Classic", "desc": "Protector of justice."},
+            "maniac": {"name": "Maniac", "emoji": "🩸", "type": "Classic", "desc": "Lone wolf killer, kills every night."},
+            "samurai": {"name": "Samurai", "emoji": "⚔️", "type": "Classic", "desc": "Protector of the city, ready to sacrifice."},
+            "ninja": {"name": "Ninja", "emoji": "👁️", "type": "Classic", "desc": "Conducts stealth observation at night."},
+            "citizen": {"name": "Civilian", "emoji": "👤", "type": "Classic", "desc": "Ordinary town member, votes during the day."}
         }
     }
     role_chars = classic_chars.get(lang, classic_chars["uz"])
-    return role_chars.get(role, {"name": "Civilian", "emoji": "👤", "anime": "Classic", "desc": "Civilian"})
+    return role_chars.get(role, {"name": "Civilian", "emoji": "👤", "type": "Classic", "desc": "Civilian"})
 
 async def safe_send_photo(context, chat_id: int, photo_url: str, caption: str):
     """Rasm yuborishga urinadi, xato bo'lsa matn yuboradi"""
@@ -1035,10 +699,10 @@ async def send_role_message(context, player: Player, game: Game):
     uid = player.id
     user_data = get_uid_data(uid)
     lang = user_data.get("lang", "uz")
-    char = player.anime_character
+    char = player.character
 
-    # Remove anime source display if it's Classic
-    source_str = f" ({char['anime']})" if char.get('anime') and char['anime'] not in ("Klassik", "Классика", "Classic") else ""
+    # Remove type source display if it's Classic
+    source_str = f" ({char['type']})" if char.get('type') and char['type'] not in ("Klassik", "Классика", "Classic") else ""
     text = f"{char['emoji']} <b>{char['name']}</b>{source_str}\n"
     text += f"🎭 Rol: {player.role.upper()}\n"
     text += f"📖 {char['desc']}\n"
@@ -1164,8 +828,6 @@ async def check_win_conditions(context, chat_id: int) -> Optional[str]:
 
     return None
 
-# ================== COMMANDS ==================
-
 # ================== AI CHAT (GEMINI) + IMAGE (IMAGEN 3) ==================
 
 ai_conversations: Dict[int, List[dict]] = {}
@@ -1180,16 +842,16 @@ AI_SETTINGS = {
 image_usage: Dict[int, dict] = {}
 
 # ── SYSTEM PROMPT ──────────────────────────────────────────────────────────────
-GEMINI_SYSTEM_PROMPT = """Sen "Mafia Bot" — Telegram'dagi anime mavzusidagi professional Mafiya o'yini botining aqlli yordamchisisisan.
+GEMINI_SYSTEM_PROMPT = """Sen "Mafia Bot" — Telegram'dagi professional va klassik Mafiya o'yini botining aqlli yordamchisisan.
 
 🎭 SEN KIMSAN:
 - Ismingiz: Mafia Bot AI
-- Shaxsiyating: Do'stona, qiziqarli, aqlli va biroz dramatik (anime uslubida)
+- Shaxsiyating: Do'stona, sirli, aqlli va biroz dramatik (klassik detektiv uslubida)
 - Suhbat olib borish uslubi: Jonli, qiziqarli, ba'zan emoji ishlatib, lekin haddan oshmasdan
 
 🎮 O'YIN HAQIDA BILADIGAN NARSALARING:
 Rollar:
-  • 👔 DON — Mafiya boshlig'i. Kechasi o'ldirish buyrug'i beradi. Kunduz boshqalarga o'xshab ko'rinadi.
+  • 👔 DON — Mafiya boshlig'i. Kechasi o'ldirish buyrug'i beradi.
   • 🔪 MAFIA — Don'ning sheriklari. Kechasi birga harakat qiladi.
   • 💚 DOCTOR — Kechasi bir kishini o'ldirishdan himoya qila oladi.
   • 🔎 KILLER (Tergovchi) — Kechasi bir kishining rolini bilib oladi.
@@ -1207,17 +869,17 @@ G'alaba shartlari:
   • Mafia g'alaba qiladi — fuqarolar soni mafiyadan kam bo'lsa
 
 Shop buyumlari:
-  • 🌀 Infinity Barrier (20 coin) — 1 kecha himoya
-  • 🎭 Kitsune Mask (15 coin) — rolni yashirish
-  • ⚡ Bankai Power (25 coin) — faol rol kuchaytirgichi
+  • 🌀 Qalqon (Shield) (20 coin) — 1 kecha himoya
+  • 🎭 Niqob (Mask) (15 coin) — rolni yashirish
+  • ⚡ Faol Rol (Active Card) (25 coin) — faol rol kuchaytirgichi
   • ♾️ O'lmasizlik (50 coin) — bir marta o'lmaydi
 
 Buyruqlar: /newgame, /join, /shop, /balance, /profile, /top, /lang, /imagine
 
 🌟 UMUMIY SUHBAT:
 Sen faqat o'yin haqida emas, har qanday mavzuda suhbatlasha olasan:
-  • Anime, manga, gaming haqida
-  • Hayot, sevgi, do'stlik, maqsadlar haqida
+  • Hayot, sevgi, do'stlik, maqsadlar qahtda
+  • Detektiv filmlar, sirlar va sarguzashtlar
   • Texnologiya, fan, qiziqarli faktlar
   • Hazil va qiziqarli suhbat
   • Agar biror narsa haqida bilmasang — rostini ayt
@@ -1230,8 +892,8 @@ Sen faqat o'yin haqida emas, har qanday mavzuda suhbatlasha olasan:
   • O'yin davomida yordam so'rasa — tezda strategiya ber
   • Haqorat yoki yomon niyatli so'rovlarga javob berma
 
-🎌 ANIME USLUBI:
-Gohida anime personajlaridan iqtibos keltirish yoki ularning uslubida gapirish mumkin, lekin haddan oshmaslik kerak. O'yin personajlari: Gojo Satoru, Itachi, Naruto, Luffy, Ichigo, Tanjiro va boshqalar."""
+🕵️ DETEKTIV USLUBI:
+Gohida klassik detektiv va mafiya filmlaridan iqtibos keltirish yoki ularning uslubida gapirish mumkin, lekin haddan oshmaslik kerak."""
 
 
 def _get_today() -> str:
@@ -1294,9 +956,9 @@ async def _gemini_chat(uid: int, text: str, user_name: str = "") -> str:
 
 async def _imagen3_generate(prompt: str) -> bytes:
     """Google Imagen 3 orqali rasm generatsiya"""
-    # Promptni anime/fantasy uslubida kuchaytirish
+    # Promptni classic/noir uslubida kuchaytirish
     enhanced_prompt = (
-        f"{prompt}, anime style, high quality, detailed, vibrant colors, "
+        f"{prompt}, classic mafia style, film noir, high quality, detailed, dark mysterious colors, "
         f"digital art, professional illustration"
     )
 
@@ -1411,7 +1073,7 @@ async def imagine(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🎨 <b>Rasm yaratish</b>\n\n"
             "Foydalanish: /imagine <tavsif>\n\n"
             "Misollar:\n"
-            "• /imagine anime girl with blue hair in moonlight\n"
+            "• /imagine mafia boss in dark office\n"
             "• /imagine ninja warrior in forest\n"
             "• /imagine futuristic city at sunset\n\n"
             f"📊 Bugun: {used}/{limit} ta rasm ishlatilgan",
@@ -1551,11 +1213,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         names = "\n".join([f"• {html.escape(p.name)}" for p in game.players.values()])
         new_text = (
             f"⚔️ <b>MAFIYA O'YINi BOSHLANMOQDA!</b> ⚔️\n\n"
-            f"🎌 Anime qahramonlari:\n"
+            f"🎲 O'yinchilar:\n"
             f"━━━━━━━━━━━━━━━━━━\n"
             f"{names}\n"
             f"━━━━━━━━━━━━━━━━━━\n"
-            f"👥 Jami: <b>{player_count}</b> nafar qahramon\n"
+            f"👥 Jami: <b>{player_count}</b> nafar\n"
             f"⏳ Ro'yxat davom etmoqda..."
         )
         try:
@@ -1580,9 +1242,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if lang == "ru":
         text = (
-            "🎌 <b>Anime Mafia — Добро пожаловать!</b> 🎌\n\n"
-            "Выбирайте своего героя и сражайтесь с друзьями в "
-            "захватывающей игре Мафия.\n\n"
+            "⚖️ <b>Mafia Bot — Добро пожаловать!</b> ⚖️\n\n"
+            "Присоединяйтесь к увлекательной игре Мафия с вашими друзьями.\n\n"
             "📜 <b>Основные команды:</b>\n"
             "┣ <b>/newgame</b> — Начать игру в группе\n"
             "┣ <b>/profile</b> — Профиль\n"
@@ -1595,13 +1256,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif lang == "en":
         text = (
-            "🎌 <b>Anime Mafia — Welcome!</b> 🎌\n\n"
-            "Choose your hero and battle with friends in "
-            "an exciting game of Mafia.\n\n"
+            "⚖️ <b>Mafia Bot — Welcome!</b> ⚖️\n\n"
+            "Play with friends in an exciting game of Mafia.\n\n"
             "📜 <b>Main Commands:</b>\n"
             "┣ <b>/newgame</b> — Start game in group\n"
             "┣ <b>/profile</b> — Your profile\n"
-            "┣ <b>/shop</b> — Anime shop\n"
+            "┣ <b>/shop</b> — Shop\n"
             "┣ <b>/help</b> — <b>Complete guide</b>\n\n"
             "🚀 <b>v2.2: Bot Cloning (New!)</b>\n"
             "Create your own bot! Just send the token from @BotFather here.\n\n"
@@ -1610,13 +1270,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     else:
         text = (
-            "🎌 <b>Anime Mafia — Rasmiy Botga Xush Kelibsiz!</b> 🎌\n\n"
-            "Siz bu yerda o'z qahramoningizni tanlab, do'stlaringiz bilan "
-            "shafqatsiz va qiziqarli mafiya o'yinini o'ynashingiz mumkin.\n\n"
+            "⚖️ <b>Mafia Bot — Rasmiy Botga Xush Kelibsiz!</b> ⚖️\n\n"
+            "Siz bu yerda do'stlaringiz bilan "
+            "qiziqarli mafiya o'yinini o'ynashingiz mumkin.\n\n"
             "📜 <b>Asosiy Buyruqlar:</b>\n"
             "┣ <b>/newgame</b> — Guruhda yangi o'yin boshlash\n"
             "┣ <b>/profile</b> — O'z statistikangizni ko'rish\n"
-            "┣ <b>/shop</b> — Anime buyumlarini sotib olish\n"
+            "┣ <b>/shop</b> — Do'kondan buyumlar sotib olish\n"
             "┣ <b>/help</b> — <b>Barcha buyruqlar va qo'llanma</b>\n\n"
             "🚀 <b>v2.2: Bot Klonlash (Yangilik!)</b>\n"
             "Endi siz o'z botingizni yaratishingiz mumkin! Shunchaki @BotFather orqali olingan "
@@ -1692,10 +1352,10 @@ async def help_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ),
         "clone": (
             "🚀 <b>Bot Klonlash (v2.2)</b>\n\n"
-            "Siz o'z shaxsiy Anime Mafia botingizni ochishingiz mumkin!\n\n"
+            "Siz o'z shaxsiy Mafia botingizni ochishingiz mumkin!\n\n"
             "1. @BotFather ga boring.\n"
             "2. Yangi bot ochib, API Tokenini oling.\n"
-            "3. Olingan tokenni ushbu botga ( @mafia_anime_bot ) yuboring.\n"
+            "3. Olingan tokenni ushbu botga yuboring.\n"
             "4. Botingiz avtomatik ishga tushadi va siz unda Admin bo'lasiz!"
         ),
         "admin": (
@@ -1752,7 +1412,7 @@ async def shop(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_data = get_uid_data(uid)
     lang_code = user_data.get("lang", "uz")
-    items = ANIME_ITEMS.get(lang_code, ANIME_ITEMS["uz"])
+    items = SHOP_ITEMS.get(lang_code, SHOP_ITEMS["uz"])
 
     kb = []
     shop_text = "🛍 " + t(uid, "shop_menu") + "\n\n"
@@ -1773,7 +1433,8 @@ async def shop(update: Update, context: ContextTypes.DEFAULT_TYPE):
             callback_data=f"buy_{item_key}"
         )])
         shop_text += f"{item_data['emoji']} {item_data['name']} ({price_str})\n"
-        shop_text += f"  📺 {item_data['anime']}\n"
+        if item_data.get('type'):
+            shop_text += f"  📺 {item_data['type']}\n"
         shop_text += f"  {item_data['desc']}\n\n"
 
     await safe_reply(update, context, shop_text, reply_markup=InlineKeyboardMarkup(kb))
@@ -1801,11 +1462,15 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username_str = f"@{user.username}" if user.username else "—"
 
     full_name_esc = html.escape(user.full_name)
+    premium = d.get("premium", 0)
+
     if lang_code == "ru":
+        prem_str = "Активен" if premium == 1 else "Нет"
         text = (
             f"👤 <b>{full_name_esc}</b>\n"
             f"🔖 {username_str}\n"
-            f"🆔 <code>{uid}</code>\n\n"
+            f"🆔 <code>{uid}</code>\n"
+            f"👑 Premium: <b>{prem_str}</b>\n\n"
             f"💰 Баланс: <b>{money} монет</b>\n\n"
             f"🎮 Статистика:\n"
             f"  🕹 Игр сыграно: <b>{games_played}</b>\n"
@@ -1819,10 +1484,12 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"📸 Чтобы сменить фото: отправьте фото с подписью /setphoto"
         )
     elif lang_code == "en":
+        prem_str = "Active" if premium == 1 else "No"
         text = (
             f"👤 <b>{full_name_esc}</b>\n"
             f"🔖 {username_str}\n"
-            f"🆔 <code>{uid}</code>\n\n"
+            f"🆔 <code>{uid}</code>\n"
+            f"👑 Premium: <b>{prem_str}</b>\n\n"
             f"💰 Balance: <b>{money} coins</b>\n\n"
             f"🎮 Stats:\n"
             f"  🕹 Games played: <b>{games_played}</b>\n"
@@ -1836,10 +1503,12 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"📸 To change photo: send a photo with caption /setphoto"
         )
     else:
+        prem_str = "Faol" if premium == 1 else "Yo'q"
         text = (
             f"👤 <b>{full_name_esc}</b>\n"
             f"🔖 {username_str}\n"
-            f"🆔 <code>{uid}</code>\n\n"
+            f"🆔 <code>{uid}</code>\n"
+            f"👑 Premium: <b>{prem_str}</b>\n\n"
             f"💰 Balans: <b>{money} coin</b>\n\n"
             f"🎮 Statistika:\n"
             f"  🕹 O'yinlar: <b>{games_played}</b>\n"
@@ -2247,7 +1916,7 @@ async def newgame(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     reg_text = (
         f"⚔️ <b>MAFIYA O'YINi BOSHLANMOQDA!</b> ⚔️\n\n"
-        f"🎌 Anime qahramonlari to'planmoqda...\n"
+        f"🎲 O'yinchilar yig'ilmoqda...\n"
         f"━━━━━━━━━━━━━━━━━━\n"
         f"👥 O'yinchilar: <b>0</b> nafar\n"
         f"⏳ Ro'yxat: <b>{REGISTRATION_TIME} soniya</b>\n"
@@ -2357,7 +2026,7 @@ async def start_game(context, chat_id: int):
         p.role = r
         udata = get_uid_data(pid)
         lang_code = udata.get("lang", "uz")
-        p.anime_character = get_anime_char(r, lang_code)
+        p.character = get_role_details(r, lang_code)
         
         # Itemlarni yuklash
         p.shield = udata.get("shield", 0)
@@ -2374,9 +2043,6 @@ async def start_game(context, chat_id: int):
             logger.info(f"Player {p.id} used a shield from inventory. Game shield: 2")
         else:
             p.shield = 1  # Har roundda default shield
-            
-        if p.anime_character['name'] in CHARACTER_ABILITIES:
-            p.abilities = CHARACTER_ABILITIES[p.anime_character['name']]['abilities'].copy()
 
     # Rollarni adminga shaxsiy chatda yuborish
     try:
@@ -3325,10 +2991,20 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         item = "_".join(q.data.split("_")[1:])  # "active_role" to'g'ri olinadi
         user_data = get_uid_data(uid)
         lang_code = user_data.get("lang", "uz")
-        items = ANIME_ITEMS.get(lang_code, ANIME_ITEMS["uz"])
+        items = SHOP_ITEMS.get(lang_code, SHOP_ITEMS["uz"])
 
         if item not in items:
             await safe_answer("❌ Noma'lum mahsulot", alert=True)
+            return
+
+        # Radar faqat premium a'zolar uchun
+        if item == "radar" and user_data.get("premium", 0) != 1:
+            if lang_code == "uz":
+                await safe_answer("❌ Radar faqat Premium a'zolar uchun!", alert=True)
+            elif lang_code == "ru":
+                await safe_answer("❌ Радар доступен только для Premium пользователей!", alert=True)
+            else:
+                await safe_answer("❌ Radar is only available for Premium members!", alert=True)
             return
 
         conf = PREMIUM_CONFIG.get("items", {}).get(item)
@@ -3357,7 +3033,9 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             bought_msg = f"Purchased! Remaining: {remaining} coins"
 
-        msg = f"✅ {item_data['emoji']} {item_data['name']}\n📺 {item_data['anime']}\n\n{bought_msg}"
+        # Classic format message (without anime details)
+        type_str = f"\n📺 {item_data['type']}" if item_data.get('type') else ""
+        msg = f"✅ {item_data['emoji']} {item_data['name']}{type_str}\n\n{bought_msg}"
         await safe_answer(bought_msg)
         await safe_edit(msg)
 
@@ -3548,6 +3226,7 @@ def main():
     app.add_handler(CommandHandler("addmoney",    adm.addmoney))
     app.add_handler(CommandHandler("removemoney", adm.removemoney))
     app.add_handler(CommandHandler("broadcast",   adm.broadcast))
+    app.add_handler(CommandHandler("setpremium",  adm.setpremium))
     app.add_handler(CommandHandler("userinfo",    adm.userinfo))
     app.add_handler(CommandHandler("top",         adm.top))
     app.add_handler(CommandHandler("stats",       adm.stats))
