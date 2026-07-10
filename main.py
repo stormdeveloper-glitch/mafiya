@@ -261,8 +261,8 @@ class DatabaseManager:
                 """)
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS tournament_participants (
-                        tournament_id INT REFERENCES tournaments(id) ON DELETE CASCADE,
-                        uid BIGINT REFERENCES users(uid),
+                        tournament_id INT,
+                        uid BIGINT,
                         points INT DEFAULT 0,
                         wins INT DEFAULT 0,
                         PRIMARY KEY (tournament_id, uid)
@@ -334,9 +334,7 @@ class DatabaseManager:
                         uid INTEGER,
                         points INTEGER DEFAULT 0,
                         wins INTEGER DEFAULT 0,
-                        PRIMARY KEY (tournament_id, uid),
-                        FOREIGN KEY (tournament_id) REFERENCES tournaments(id) ON DELETE CASCADE,
-                        FOREIGN KEY (uid) REFERENCES users(uid)
+                        PRIMARY KEY (tournament_id, uid)
                     );
                 """)
                 conn.commit()
