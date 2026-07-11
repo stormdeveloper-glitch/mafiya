@@ -1,0 +1,12 @@
+.env
+__pycache__/
+*.pyc
+*.db
+users.json
+admins.json
+session_players.json
+last_update.txt
+users.json.bak
+venv/
+.idea/
+.vscode/
