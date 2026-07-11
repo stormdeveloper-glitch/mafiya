@@ -84,11 +84,11 @@ COMMAND_COOLDOWN = 2
 MIN_PLAYERS = 3
 MAX_PLAYERS = 50
 
-# ESLATMA: Private kanal linklaridan bot rasm yubora olmaydi.
+# Eslatma: Private kanal linklaridan bot rasm yubora olmaydi.
 # Agar rasmlar kerak bo'lsa, public URL yoki file_id bilan almashtiring.
-# Hozirda xato bo'lsa matnga fallback qiladi.
-DAY_IMAGE_URL = "https://t.me/c/3882935867/12"
-NIGHT_IMAGE_URL = "https://t.me/c/3882935867/13"
+# Hozircha xato bo'lsa matnga fallback qiladi.
+DAY_IMAGE_URL = os.getenv("DAY_IMAGE_URL", "https://t.me/c/3882935867/12")
+NIGHT_IMAGE_URL = os.getenv("NIGHT_IMAGE_URL", "https://t.me/c/3882935867/13")
 
 REGISTRATION_TIME = 120
 NIGHT_DURATION = 60
