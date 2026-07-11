@@ -10,7 +10,16 @@ logger = logging.getLogger(__name__)
 
 # Constants
 DB_PATH = "data/mafia.db"
-DATABASE_URL = os.getenv("DATABASE_URL")
+
+
+def get_database_url() -> Optional[str]:
+    """Reads DATABASE_URL from the environment at call time.
+
+    Railway resolves reference variables (e.g. ${{ Postgres.DATABASE_URL }})
+    after the process starts, so we must not cache this at import time.
+    """
+    return os.getenv("DATABASE_URL")
+
 
 # Lazy-loaded PostgreSQL pool
 _pg_pool = None
@@ -25,7 +34,7 @@ except ImportError:
 async def get_pg_pool():
     """Lazily creates and returns the PostgreSQL connection pool."""
     global _pg_pool
-    if DATABASE_URL:
+    if get_database_url():
         if asyncpg is None:
             raise ImportError(
                 "PostgreSQL DATABASE_URL config is set, but 'asyncpg' library is not installed. "
@@ -44,7 +53,7 @@ async def get_pg_pool():
 
         if _pg_pool is None:
             # Handle legacy 'postgres://' connection URI replacing it with 'postgresql://'
-            url = DATABASE_URL
+            url = get_database_url()
             if url.startswith("postgres://"):
                 url = url.replace("postgres://", "postgresql://", 1)
             logger.info("Initializing PostgreSQL connection pool...")
@@ -61,7 +70,7 @@ def convert_placeholders(query: str) -> str:
 
 async def execute_query(query: str, *args):
     """Executes a non-returning SQL query."""
-    if DATABASE_URL:
+    if get_database_url():
         pool = await get_pg_pool()
         async with pool.acquire() as conn:
             return await conn.execute(query, *args)
@@ -74,7 +83,7 @@ async def execute_query(query: str, *args):
 
 async def execute_insert(query: str, *args) -> int:
     """Executes an INSERT query and returns the last inserted primary key row ID."""
-    if DATABASE_URL:
+    if get_database_url():
         pool = await get_pg_pool()
         async with pool.acquire() as conn:
             return await conn.fetchval(query, *args)
@@ -90,7 +99,7 @@ async def execute_insert(query: str, *args) -> int:
 
 async def fetch_all(query: str, *args) -> list[dict]:
     """Fetches all rows for a query and returns them as a list of dicts."""
-    if DATABASE_URL:
+    if get_database_url():
         pool = await get_pg_pool()
         async with pool.acquire() as conn:
             rows = await conn.fetch(query, *args)
@@ -106,7 +115,7 @@ async def fetch_all(query: str, *args) -> list[dict]:
 
 async def fetch_row(query: str, *args) -> dict | None:
     """Fetches a single row and returns it as a dict or None."""
-    if DATABASE_URL:
+    if get_database_url():
         pool = await get_pg_pool()
         async with pool.acquire() as conn:
             row = await conn.fetchrow(query, *args)
@@ -122,7 +131,7 @@ async def fetch_row(query: str, *args) -> dict | None:
 
 async def fetch_val(query: str, *args):
     """Fetches a single scalar value (e.g. COUNT(*))."""
-    if DATABASE_URL:
+    if get_database_url():
         pool = await get_pg_pool()
         async with pool.acquire() as conn:
             return await conn.fetchval(query, *args)
@@ -138,7 +147,7 @@ async def fetch_val(query: str, *args):
 
 async def migrate_sqlite_to_postgres():
     """SQLite data migration to PostgreSQL."""
-    if not os.path.exists(DB_PATH) or not DATABASE_URL:
+    if not os.path.exists(DB_PATH) or not get_database_url():
         return
 
     logger.info("🔄 SQLite-dan PostgreSQL-ga ma'lumotlarni nusxalash (migratsiya) boshlandi...")
@@ -267,7 +276,7 @@ class DatabaseManager:
         ]
         
         # In SQLite, SERIAL is AUTOINCREMENT, BIGINT is INTEGER
-        if not DATABASE_URL:
+        if not get_database_url():
             # Simple convert for SQLite
             sqlite_queries = []
             for q in queries:
@@ -306,7 +315,7 @@ class DatabaseManager:
     async def ban_user(self, uid: int, reason: str, banned_by: int):
         from datetime import datetime
         now = datetime.now().isoformat()
-        if DATABASE_URL:
+        if get_database_url():
             q = "INSERT INTO bans (uid, reason, banned_by, banned_at) VALUES ($1,$2,$3,$4) ON CONFLICT (uid) DO UPDATE SET reason=$5, banned_by=$6, banned_at=$7"
             await execute_query(q, uid, reason, banned_by, now, reason, banned_by, now)
         else:
@@ -336,7 +345,7 @@ class DatabaseManager:
         return None
 
     async def create_user(self, uid: int, name: str = None, username: str = None):
-        if DATABASE_URL:
+        if get_database_url():
             q = "INSERT INTO users (uid, name, username) VALUES ($1, $2, $3) ON CONFLICT (uid) DO NOTHING"
         else:
             q = "INSERT OR IGNORE INTO users (uid, name, username) VALUES ($1, $2, $3)"
@@ -356,7 +365,7 @@ class DatabaseManager:
         return {row['uid'] for row in rows}
 
     async def add_admin(self, uid: int):
-        if DATABASE_URL:
+        if get_database_url():
             q = "INSERT INTO admins (uid) VALUES ($1) ON CONFLICT DO NOTHING"
         else:
             q = "INSERT OR IGNORE INTO admins (uid) VALUES ($1)"
@@ -374,7 +383,7 @@ class DatabaseManager:
         return await fetch_all("SELECT * FROM tournaments ORDER BY created_at DESC")
 
     async def join_tournament(self, tournament_id: int, uid: int):
-        if DATABASE_URL:
+        if get_database_url():
             q = "INSERT INTO tournament_participants (tournament_id, uid) VALUES ($1, $2) ON CONFLICT DO NOTHING"
         else:
             q = "INSERT OR IGNORE INTO tournament_participants (tournament_id, uid) VALUES ($1, $2)"
@@ -418,7 +427,7 @@ class DatabaseManager:
         return row['url'] if row and 'url' in row else default
 
     async def set_asset_url(self, key: str, url: str):
-        if DATABASE_URL:
+        if get_database_url():
             await execute_query("INSERT INTO game_assets (key, url) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET url = $3", key, url, url)
         else:
             await execute_query("INSERT OR REPLACE INTO game_assets (key, url) VALUES ($1, $2)", key, url)
