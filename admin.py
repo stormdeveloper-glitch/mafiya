@@ -125,7 +125,7 @@ def _game_status_text(game, chat_id: int) -> str:
 async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if _check_cooldown(uid):
-        await _safe_reply(update, context, _cooldown_msg(uid)); return
+        await _safe_reply(update, context, await _cooldown_msg(uid)); return
     if not is_user_admin(uid):
         await _safe_reply(update, context, _t(uid, "not_admin")); return
     await _safe_reply(update, context,
@@ -138,7 +138,7 @@ async def stopgame(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     chat_id = update.effective_chat.id
     if _check_cooldown(uid):
-        await _safe_reply(update, context, _cooldown_msg(uid)); return
+        await _safe_reply(update, context, await _cooldown_msg(uid)); return
     if not is_user_admin(uid):
         await _safe_reply(update, context, _t(uid, "not_admin")); return
     if chat_id not in _games:
@@ -154,7 +154,7 @@ async def resetgame(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     chat_id = update.effective_chat.id
     if _check_cooldown(uid):
-        await _safe_reply(update, context, _cooldown_msg(uid)); return
+        await _safe_reply(update, context, await _cooldown_msg(uid)); return
     if not is_user_admin(uid):
         await _safe_reply(update, context, _t(uid, "not_admin")); return
     if chat_id in _games:
@@ -364,6 +364,26 @@ async def removemoney(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await _safe_reply(update, context,
         f"💸 <code>{target}</code> dan <b>-{amount} coin</b>\n"
         f"💰 Yangi balans: <b>{new_bal}</b>", parse_mode="HTML")
+
+async def setpremium(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    if not is_user_admin(uid):
+        await _safe_reply(update, context, _t(uid, "not_admin")); return
+    if len(context.args or []) < 2:
+        await _safe_reply(update, context, "❓ /setpremium <user_id> <0 yoki 1>"); return
+    try:
+        target, status = int(context.args[0]), int(context.args[1])
+    except ValueError:
+        await _safe_reply(update, context, "❌ Raqam bo'lishi kerak"); return
+    
+    d = _DB.get_user(target)
+    if not d:
+        await _safe_reply(update, context, "❌ Foydalanuvchi topilmadi"); return
+        
+    _DB.update_user(target, premium=status)
+    status_str = "Faol (Active)" if status == 1 else "O'chirilgan (Inactive)"
+    await _safe_reply(update, context,
+        f"👑 <code>{target}</code> premium holati → <b>{status_str}</b>", parse_mode="HTML")
 
 # ================== BROADCAST ==================
 
@@ -590,7 +610,7 @@ async def handle_admin_callback(q, uid, safe_answer, safe_edit, context=None):
         await safe_answer()
         await safe_edit(
             "☁️ <b>Bucket (S3) Yuklovchi</b>\n\n"
-            "Ushbu bo'lim orqali istalgan faylni bulutli saqlagichga (Bucket) yuklab havolasini olishingiz, hamda o'yin boshlanganda (tun bo'lganda) yoki tong otganda ko'rsatiladigan anime GIF-videolarini yangilashingiz mumkin.\n\n"
+            "Ushbu bo'lim orqali istalgan faylni bulutli saqlagichga (Bucket) yuklab havolasini olishingiz, hamda o'yin boshlanganda (tun bo'lganda) yoki tong otganda ko'rsatiladigan GIF-videolarini yangilashingiz mumkin.\n\n"
             "Kerakli amalni tanlang:",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup([

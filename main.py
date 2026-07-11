@@ -100,309 +100,11 @@ WIN_REWARD = 60
 # ================== PERSISTENT STORAGE ==================
 
 # ================== DATABASE & STORAGE ==================
-import sqlite3
-from contextlib import contextmanager
-
-class DatabaseManager:
-    def __init__(self):
-        os.makedirs("data", exist_ok=True)
-        # In-memory cache: {uid: dict}
-        self._cache: Dict[int, dict] = {}
-        self._init_db()
-
-    def _get_conn(self):
-        conn = sqlite3.connect("data/mafia.db", check_same_thread=False)
-        conn.row_factory = sqlite3.Row
-        return conn
-
-    @contextmanager
-    def _cursor(self, commit: bool = False):
-        """
-        Xavfsiz connection va cursor boshqaruvi uchun Context Manager.
-        Avtomatik ravishda xatolik bo'lsa rollback qiladi va oxirida close qiladi.
-        """
-        conn = self._get_conn()
-        try:
-            cur = conn.cursor()
-            yield cur
-            if commit:
-                conn.commit()
-        except Exception as e:
-            if commit:
-                conn.rollback()
-            logger.error(f"Database error: {e}")
-            raise
-        finally:
-            cur.close()
-            conn.close()
-
-    def _invalidate(self, uid: int):
-        self._cache.pop(uid, None)
-
-    def _init_db(self):
-        conn = self._get_conn()
-        cur = conn.cursor()
-
-        try:
-            # ── SQLite: Create all tables ──
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    uid INTEGER PRIMARY KEY,
-                    username TEXT,
-                    name TEXT,
-                    money INTEGER DEFAULT 100,
-                    shield INTEGER DEFAULT 0,
-                    documents INTEGER DEFAULT 0,
-                    active_role INTEGER DEFAULT 0,
-                    immortality INTEGER DEFAULT 0,
-                    games_played INTEGER DEFAULT 0,
-                    games_won INTEGER DEFAULT 0,
-                    last_played TEXT,
-                    photo BLOB,
-                    lang TEXT DEFAULT 'uz',
-                    premium INTEGER DEFAULT 0
-                );
-            """)
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS admins (
-                    uid INTEGER PRIMARY KEY
-                );
-            """)
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS game_assets (
-                    key TEXT PRIMARY KEY,
-                    url TEXT NOT NULL
-                );
-            """)
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS bans (
-                    uid INTEGER PRIMARY KEY,
-                    reason TEXT,
-                    banned_by INTEGER,
-                    banned_at TEXT
-                );
-            """)
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS warns (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    uid INTEGER,
-                    reason TEXT,
-                    warned_by INTEGER,
-                    warned_at TEXT
-                );
-            """)
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS tournaments (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT NOT NULL,
-                    prize_amount INTEGER DEFAULT 0,
-                    status TEXT DEFAULT 'open',
-                    winner_uid INTEGER,
-                    created_at TEXT
-                );
-            """)
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS tournament_participants (
-                    tournament_id INTEGER,
-                    uid INTEGER,
-                    points INTEGER DEFAULT 0,
-                    wins INTEGER DEFAULT 0,
-                    PRIMARY KEY (tournament_id, uid)
-                );
-            """)
-            conn.commit()
-
-            # SQLite Migration: add 'premium' column if missing
-            try:
-                cur.execute("SELECT premium FROM users LIMIT 0;")
-            except sqlite3.OperationalError:
-                try:
-                    cur.execute("ALTER TABLE users ADD COLUMN premium INTEGER DEFAULT 0;")
-                    conn.commit()
-                except sqlite3.OperationalError:
-                    pass
-        finally:
-            conn.close()
-
-    def ban_user(self, uid: int, reason: str, banned_by: int):
-        from datetime import datetime
-        q = "INSERT OR REPLACE INTO bans (uid, reason, banned_by, banned_at) VALUES (?,?,?,?)"
-        now = datetime.now().isoformat()
-        with self._cursor(commit=True) as cur:
-            cur.execute(q, (uid, reason, banned_by, now))
-
-    def unban_user(self, uid: int):
-        with self._cursor(commit=True) as cur:
-            cur.execute("DELETE FROM bans WHERE uid = ?", (uid,))
-
-    def is_banned(self, uid: int) -> Optional[dict]:
-        with self._cursor() as cur:
-            cur.execute("SELECT * FROM bans WHERE uid = ?", (uid,))
-            row = cur.fetchone()
-            return dict(row) if row else None
-
-    def get_total_users(self) -> int:
-        with self._cursor() as cur:
-            cur.execute("SELECT COUNT(*) FROM users")
-            return cur.fetchone()[0]
-
-    def get_top_players(self, limit: int = 10) -> list:
-        with self._cursor() as cur:
-            cur.execute(
-                "SELECT uid, name, username, games_played, games_won, money FROM users ORDER BY games_won DESC LIMIT ?",
-                (limit,)
-            )
-            rows = cur.fetchall()
-            return [dict(r) for r in rows]
-
-    def get_user(self, uid: int) -> Optional[dict]:
-        if uid in self._cache:
-            return self._cache[uid].copy()
-        with self._cursor() as cur:
-            cur.execute("SELECT * FROM users WHERE uid = ?", (uid,))
-            row = cur.fetchone()
-            if row:
-                data = dict(row)
-                self._cache[uid] = data.copy()
-                return data
-            return None
-
-    def create_user(self, uid: int, name: str = None, username: str = None):
-        query = """
-            INSERT OR IGNORE INTO users (uid, name, username)
-            VALUES (?, ?, ?)
-        """
-        with self._cursor(commit=True) as cur:
-            cur.execute(query, (uid, name, username))
-        self._invalidate(uid)
-
-    def update_user(self, uid: int, **kwargs):
-        if not kwargs: return
-        cols = ", ".join([f"{k} = ?" for k in kwargs.keys()])
-        vals = list(kwargs.values()) + [uid]
-        query = f"UPDATE users SET {cols} WHERE uid = ?"
-        with self._cursor(commit=True) as cur:
-            cur.execute(query, vals)
-        self._invalidate(uid)
-
-    def get_admins(self) -> set:
-        with self._cursor() as cur:
-            cur.execute("SELECT uid FROM admins")
-            rows = cur.fetchall()
-            return {row[0] for row in rows}
-
-    def add_admin(self, uid: int):
-        query = "INSERT OR IGNORE INTO admins (uid) VALUES (?)"
-        with self._cursor(commit=True) as cur:
-            cur.execute(query, (uid,))
-
-    def remove_admin(self, uid: int):
-        with self._cursor(commit=True) as cur:
-            cur.execute("DELETE FROM admins WHERE uid = ?", (uid,))
-
-    # ── TOURNAMENTS ──
-    def create_tournament(self, name: str, prize: int = 0):
-        from datetime import datetime
-        now = datetime.now().isoformat()
-        with self._cursor(commit=True) as cur:
-            cur.execute("INSERT INTO tournaments (name, prize_amount, created_at) VALUES (?, ?, ?)", (name, prize, now))
-
-    def get_tournaments(self):
-        with self._cursor() as cur:
-            cur.execute("SELECT * FROM tournaments ORDER BY created_at DESC")
-            rows = cur.fetchall()
-            return [dict(r) for r in rows]
-
-    def join_tournament(self, tournament_id: int, uid: int):
-        query = "INSERT OR IGNORE INTO tournament_participants (tournament_id, uid) VALUES (?, ?)"
-        with self._cursor(commit=True) as cur:
-            cur.execute(query, (tournament_id, uid))
-
-    def get_tournament_leaderboard(self, tournament_id: int):
-        with self._cursor() as cur:
-            cur.execute("""
-                SELECT tp.*, u.name, u.username 
-                FROM tournament_participants tp
-                JOIN users u ON tp.uid = u.uid
-                WHERE tp.tournament_id = ?
-                ORDER BY tp.points DESC, tp.wins DESC
-            """, (tournament_id,))
-            rows = cur.fetchall()
-            return [dict(r) for r in rows]
-
-    def update_tournament_status(self, tournament_id: int, status: str):
-        with self._cursor(commit=True) as cur:
-            cur.execute("UPDATE tournaments SET status = ? WHERE id = ?", (status, tournament_id))
-
-    def finish_tournament(self, tournament_id: int):
-        """Turnirni yakunlash va g'olibga sovg'ani berish"""
-        with self._cursor(commit=True) as cur:
-            # Turnir info olish
-            cur.execute("SELECT * FROM tournaments WHERE id = ?", (tournament_id,))
-            t = cur.fetchone()
-            if not t or t['status'] == 'finished':
-                return None
-            
-            # G'olibni aniqlash (leaderboard top 1)
-            cur.execute("""
-                SELECT uid FROM tournament_participants 
-                WHERE tournament_id = ? 
-                ORDER BY points DESC, wins DESC LIMIT 1
-            """, (tournament_id,))
-            winner_row = cur.fetchone()
-            
-            if winner_row:
-                winner_uid = winner_row['uid']
-                prize = t['prize_amount']
-                
-                # 1. Turnir statusini yangilash
-                cur.execute("UPDATE tournaments SET status = 'finished', winner_uid = ? WHERE id = ?", (winner_uid, tournament_id))
-                
-                # 2. G'olibning balansiga pul qo'shish (botda avtomatik)
-                # Pulni users table-da yangilash
-                cur.execute("UPDATE users SET money = money + ? WHERE uid = ?", (prize, winner_uid))
-                
-                self._invalidate(winner_uid)
-                return {"uid": winner_uid, "prize": prize}
-            
-            return None
-
-    def get_asset_url(self, key: str, default: str) -> str:
-        try:
-            with self._cursor() as cur:
-                cur.execute("SELECT url FROM game_assets WHERE key = ?", (key,))
-                row = cur.fetchone()
-                return row['url'] if row and 'url' in row else (row[0] if row else default)
-        except Exception as e:
-            logger.error(f"Error getting asset url for {key}: {e}")
-            return default
-
-    def set_asset_url(self, key: str, url: str):
-        try:
-            with self._cursor(commit=True) as cur:
-                cur.execute("INSERT OR REPLACE INTO game_assets (key, url) VALUES (?, ?)", (key, url))
-        except Exception as e:
-            logger.error(f"Error setting asset url for {key}: {e}")
-
-
-DB = DatabaseManager()
-
-def get_uid_data(uid: int) -> dict:
-    if uid == 0:
-        return {"lang": "uz", "money": 0, "shield": 0, "documents": 0,
-                "active_role": 0, "immortality": 0, "games_played": 0, "games_won": 0}
-    data = DB.get_user(uid)
-    if not data:
-        DB.create_user(uid)
-        data = DB.get_user(uid)
-    if not data:
-        return {"uid": uid, "lang": "uz", "money": 100, "shield": 0, "documents": 0,
-                "active_role": 0, "immortality": 0, "games_played": 0, "games_won": 0}
-    return data
+from database import DB, get_uid_data
 
 import io
 
-def migrate_from_json():
+async def migrate_from_json():
     """Lokal JSON ma'lumotlarini bazaga ko'chirish"""
     if os.path.exists("users.json"):
         try:
@@ -410,9 +112,9 @@ def migrate_from_json():
                 data = json.load(f)
                 for uid_str, d in data.items():
                     uid = int(uid_str)
-                    if not DB.get_user(uid):
-                        DB.create_user(uid, d.get("name"), d.get("username"))
-                        DB.update_user(uid, 
+                    if not await DB.get_user(uid):
+                        await DB.create_user(uid, d.get("name"), d.get("username"))
+                        await DB.update_user(uid, 
                             money=d.get("money", 100),
                             shield=d.get("shield", 0),
                             documents=d.get("documents", 0),
@@ -432,12 +134,10 @@ def migrate_from_json():
             with open("admins.json", "r") as f:
                 data = json.load(f)
                 for aid in data.get("admins", []):
-                    DB.add_admin(aid)
+                    await DB.add_admin(aid)
             logger.info("Admin data migrated successfully.")
         except Exception as e:
             logger.error(f"Admin migration error: {e}")
-
-migrate_from_json()
 
 # ================== COMMAND COOLDOWN ==================
 
@@ -452,10 +152,10 @@ def check_cooldown(uid: int) -> bool:
     user_cooldowns[uid] = now
     return False
 
-def cooldown_msg(uid: int) -> str:
+async def cooldown_msg(uid: int) -> str:
     """Cooldown xabari foydalanuvchi tili asosida"""
     remaining = max(0, int(COMMAND_COOLDOWN - (datetime.now().timestamp() - user_cooldowns.get(uid, 0))))
-    user_data = get_uid_data(uid)
+    user_data = await get_uid_data(uid)
     lang = user_data.get("lang", "uz")
     msgs = {
         "uz": f"⏱️ {remaining} soniyaga kutib turing",
@@ -751,8 +451,8 @@ LANGUAGES = {
 
 def t(uid: int, key: str) -> str:
     """Foydalanuvchi tili asosida matn qaytarish"""
-    user_data = get_uid_data(uid)
-    lang = user_data.get("lang", "uz")
+    user_data = DB._cache.get(uid)
+    lang = user_data.get("lang", "uz") if user_data else "uz"
     return LANGUAGES.get(lang, LANGUAGES["uz"]).get(key, key)
 
 # ================== DATA MODELS ==================
@@ -847,10 +547,7 @@ def session_load_all() -> dict:
         return {}
 
 # Adminlarni bazadan yuklash, ADMIN_ID ni ham qo'shish
-ADMINS: set = DB.get_admins()
-if ADMIN_ID and ADMIN_ID != 0:
-    ADMINS.add(ADMIN_ID)
-    DB.add_admin(ADMIN_ID)
+ADMINS: set = set()
 
 # ================== HELPERS ==================
 
@@ -996,7 +693,7 @@ async def safe_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, text: s
 async def send_role_message(context, player: Player, game: Game):
     """O'yinchiga uning roli va amallarini yuborish"""
     uid = player.id
-    user_data = get_uid_data(uid)
+    user_data = await get_uid_data(uid)
     lang = user_data.get("lang", "uz")
     char = player.character
 
@@ -1351,7 +1048,7 @@ async def ai_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def imagine(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """/imagine <tavsif> — Imagen 3 orqali rasm yaratish"""
     uid = update.effective_user.id
-    user_data = get_uid_data(uid)
+    user_data = await get_uid_data(uid)
     lang = user_data.get("lang", "uz")
 
     if not AI_SETTINGS.get("image_enabled", True):
@@ -1461,12 +1158,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
 
     # Foydalanuvchini DBga qo'shish/yangilash
-    DB.create_user(uid, update.effective_user.full_name, update.effective_user.username)
+    await DB.create_user(uid, update.effective_user.full_name, update.effective_user.username)
 
     # ===== JOIN tizimi: /start chat_-1001234567890 =====
     if context.args and context.args[0].startswith("chat_"):
         # Ban tekshiruvi
-        ban_info = DB.is_banned(uid)
+        ban_info = await DB.is_banned(uid)
         if ban_info:
             await update.message.reply_text(
                 f"🚫 Siz botdan ban qilingansiz!\n"
@@ -1536,7 +1233,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # Normal START message
-    user_data = get_uid_data(uid)
+    user_data = await get_uid_data(uid)
     lang = user_data.get("lang", "uz")
 
     if lang == "ru":
@@ -1679,7 +1376,7 @@ async def help_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def lang(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if check_cooldown(uid):
-        await safe_reply(update, context, cooldown_msg(uid))
+        await safe_reply(update, context, await cooldown_msg(uid))
         return
     kb = [
         [InlineKeyboardButton("🇺🇿 O'zbek", callback_data="lang_uz")],
@@ -1692,9 +1389,9 @@ async def lang(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if check_cooldown(uid):
-        await safe_reply(update, context, cooldown_msg(uid))
+        await safe_reply(update, context, await cooldown_msg(uid))
         return
-    money = get_uid_data(uid)["money"]
+    money = (await get_uid_data(uid))["money"]
     await safe_reply(update, context, t(uid, "balance").format(money))
 
 async def shop(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1702,14 +1399,14 @@ async def shop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
 
     if check_cooldown(uid):
-        await safe_reply(update, context, cooldown_msg(uid))
+        await safe_reply(update, context, await cooldown_msg(uid))
         return
 
     if chat_id in games and games[chat_id].state not in ("registration", "end", "stopped"):
         await safe_reply(update, context, t(uid, "shop_blocked"))
         return
 
-    user_data = get_uid_data(uid)
+    user_data = await get_uid_data(uid)
     lang_code = user_data.get("lang", "uz")
     items = SHOP_ITEMS.get(lang_code, SHOP_ITEMS["uz"])
 
@@ -1744,9 +1441,9 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
 
     # Foydalanuvchi ma'lumotlarini yaratish/yangilash
-    DB.create_user(uid, user.full_name, user.username)
-    DB.update_user(uid, name=user.full_name, username=user.username)
-    d = get_uid_data(uid)
+    await DB.create_user(uid, user.full_name, user.username)
+    await DB.update_user(uid, name=user.full_name, username=user.username)
+    d = await get_uid_data(uid)
 
     games_played = d.get("games_played", 0)
     games_won = d.get("games_won", 0)
@@ -1894,10 +1591,10 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f_info = await context.bot.get_file(photo.file_id)
         photo_bytes = bytes(await f_info.download_as_bytearray())
 
-        DB.create_user(uid, update.effective_user.full_name, update.effective_user.username)
-        DB.update_user(uid, photo=photo_bytes)
+        await DB.create_user(uid, update.effective_user.full_name, update.effective_user.username)
+        await DB.update_user(uid, photo=photo_bytes)
 
-        user_data = get_uid_data(uid)
+        user_data = await get_uid_data(uid)
         lang_code = user_data.get("lang", "uz")
         if lang_code == "ru":
             msg = "✅ Фото профиля обновлено!\n👉 /profile — посмотреть"
@@ -2077,7 +1774,7 @@ async def admin_file_upload_handler(update: Update, context: ContextTypes.DEFAUL
                     )
                 else:
                     # Tun yoki kun rasmini o'rnatish
-                    DB.set_asset_url(asset_type, bucket_url)
+                    await DB.set_asset_url(asset_type, bucket_url)
                     context.user_data.pop("waiting_for_asset", None)
                     label = "🌙 Tun (Kecha)" if asset_type == "night_start" else "☀️ Tong (Kun)"
                     await status.edit_text(
@@ -2154,7 +1851,7 @@ async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def preview_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Admin uchun kanal xabarini generatsiya qilish va ko'rsatish"""
     uid = update.effective_user.id
-    if uid != ADMIN_ID and not DB.is_admin(uid):
+    if uid != ADMIN_ID and not await DB.is_admin(uid):
         return
 
     msg = await update.message.reply_text("⏳ AI yangiliklar postini tayyorlamoqda...")
@@ -2186,7 +1883,7 @@ async def newgame(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
 
     if check_cooldown(uid):
-        await safe_reply(update, context, cooldown_msg(uid))
+        await safe_reply(update, context, await cooldown_msg(uid))
         return
 
     error = validate_game_state(chat_id)
@@ -2293,10 +1990,10 @@ async def start_game(context, chat_id: int):
     # O'yinchilarning active_role statusini tekshirish
     guaranteed_active = []
     for pid in player_id_list:
-        udata = get_uid_data(pid)
+        udata = await get_uid_data(pid)
         if udata.get("active_role", 0) > 0:
             guaranteed_active.append(pid)
-            DB.update_user(pid, active_role=udata["active_role"] - 1)
+            await DB.update_user(pid, active_role=udata["active_role"] - 1)
 
     # Rol poolini olish
     roles = role_pool(len(alive_players))
@@ -2323,7 +2020,7 @@ async def start_game(context, chat_id: int):
     for pid, r in assigned_roles.items():
         p = alive_players[pid]
         p.role = r
-        udata = get_uid_data(pid)
+        udata = await get_uid_data(pid)
         lang_code = udata.get("lang", "uz")
         p.character = get_role_details(r, lang_code)
         
@@ -2331,13 +2028,13 @@ async def start_game(context, chat_id: int):
         p.shield = udata.get("shield", 0)
         # Bitta o'yin uchun max 1 ta ishlatilsin (bazada kamaytirish)
         if p.shield > 0:
-            DB.update_user(pid, shield=p.shield - 1)
+            await DB.update_user(pid, shield=p.shield - 1)
             p.shield = 1 # Faqat bitta himoya beramiz
         
         # Shield integration: if user has a shield in inventory, consume 1 and set game shield to 2
         inv_shields = user_data.get("shield", 0)
         if inv_shields > 0:
-            DB.update_user(p.id, shield=inv_shields - 1)
+            await DB.update_user(p.id, shield=inv_shields - 1)
             p.shield = 2
             logger.info(f"Player {p.id} used a shield from inventory. Game shield: 2")
         else:
@@ -2406,7 +2103,7 @@ async def start_game(context, chat_id: int):
         f"🔎 Tergovchi sir izlamoqda...\n\n"
         f"⏳ <b>{NIGHT_DURATION} soniya</b> — Jim turing!"
     )
-    night_url = DB.get_asset_url("night_start", NIGHT_IMAGE_URL)
+    night_url = await DB.get_asset_url("night_start", NIGHT_IMAGE_URL)
     await safe_send_media(context, chat_id, night_url, night_text)
 
     for player in alive_players.values():
@@ -2436,13 +2133,13 @@ async def process_night_actions(context, chat_id: int):
             continue
         
         target = game.players[t_id]
-        target_inv = get_uid_data(t_id)
+        target_inv = await get_uid_data(t_id)
 
         if action["type"] in ("kill", "maniac_kill"):
             # Immortality check
             immortality = target_inv.get("immortality", 0)
             if immortality > 0:
-                DB.update_user(t_id, immortality=immortality - 1)
+                await DB.update_user(t_id, immortality=immortality - 1)
                 continue
 
             if target.shield > 0:
@@ -2457,7 +2154,7 @@ async def process_night_actions(context, chat_id: int):
             role = target.role
             docs = target_inv.get("documents", 0)
             if docs > 0:
-                DB.update_user(t_id, documents=docs - 1)
+                await DB.update_user(t_id, documents=docs - 1)
                 role = "citizen (masked)"
             
             actor = action["actor"]
@@ -2472,7 +2169,7 @@ async def process_night_actions(context, chat_id: int):
             # If target is masked (documents), they appear as citizen
             docs = target_inv.get("documents", 0)
             if docs > 0:
-                DB.update_user(t_id, documents=docs - 1)
+                await DB.update_user(t_id, documents=docs - 1)
                 result = "✅ CITIZEN"
             elif role in ("mafia", "don"):
                 result = f"⚠️ {role.upper()}!"
@@ -2584,7 +2281,7 @@ async def process_night_actions(context, chat_id: int):
         f"⏳ {DAY_DURATION} soniya — Mafiyani toping!"
     )
 
-    day_url = DB.get_asset_url("day_start", DAY_IMAGE_URL)
+    day_url = await DB.get_asset_url("day_start", DAY_IMAGE_URL)
     await safe_send_media(context, chat_id, day_url, day_text)
 
     asyncio.create_task(_day_timer(context, chat_id))
@@ -2746,15 +2443,15 @@ async def end_game(context, chat_id: int, winner: str):
 
     # Statistika yangilash
     for p in game.players.values():
-        d = get_uid_data(p.id)
-        DB.update_user(p.id,
+        d = await get_uid_data(p.id)
+        await DB.update_user(p.id,
             games_played=d.get("games_played", 0) + 1,
             last_played=datetime.now().isoformat()
         )
 
     for wid in winner_ids:
-        d = get_uid_data(wid)
-        DB.update_user(wid,
+        d = await get_uid_data(wid)
+        await DB.update_user(wid,
             money=d.get("money", 0) + WIN_REWARD,
             games_won=d.get("games_won", 0) + 1
         )
@@ -2996,7 +2693,7 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Profil rasm o'zgartirish yo'riqnomasi
     if q.data == "change_photo":
-        user_data = get_uid_data(uid)
+        user_data = await get_uid_data(uid)
         lang_code = user_data.get("lang", "uz")
         if lang_code == "ru":
             msg = "📸 Отправьте фото с подписью /setphoto — и оно станет вашим фото профиля."
@@ -3010,7 +2707,7 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Til o'zgartirish
     elif q.data.startswith("lang_"):
         lang_code = q.data.split("_")[1]
-        DB.update_user(uid, lang=lang_code)
+        await DB.update_user(uid, lang=lang_code)
         await safe_answer(t(uid, "lang_set"))
         await safe_edit(t(uid, "lang_set"))
 
@@ -3288,7 +2985,7 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # BUG FIX #1: "buy_active_role" uchun to'liq key
     elif q.data.startswith("buy_"):
         item = "_".join(q.data.split("_")[1:])  # "active_role" to'g'ri olinadi
-        user_data = get_uid_data(uid)
+        user_data = await get_uid_data(uid)
         lang_code = user_data.get("lang", "uz")
         items = SHOP_ITEMS.get(lang_code, SHOP_ITEMS["uz"])
 
@@ -3312,7 +3009,7 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         price = conf["price"] if conf else items[item]["price"]
-        user_money = get_uid_data(uid)["money"]
+        user_money = (await get_uid_data(uid))["money"]
 
         if user_money < price:
             await safe_answer(t(uid, "not_enough_money"), alert=True)
@@ -3321,7 +3018,7 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # BUG FIX #3: Persistent storage dan foydalanish
         new_money = user_money - price
         new_item_count = user_data.get(item, 0) + 1
-        DB.update_user(uid, money=new_money, **{item: new_item_count})
+        await DB.update_user(uid, money=new_money, **{item: new_item_count})
 
         item_data = items[item]
         remaining = new_money
@@ -3415,7 +3112,18 @@ def main():
 
     # ================== BOT KOMANDALAR MENYUSI ==================
     async def post_init(application):
-        global BOT_USERNAME
+        global BOT_USERNAME, ADMINS
+        
+        # Baza va adminlarni sozlash
+        await DB.init_db()
+        ADMINS.update(await DB.get_admins())
+        if ADMIN_ID and ADMIN_ID != 0:
+            ADMINS.add(ADMIN_ID)
+            await DB.add_admin(ADMIN_ID)
+            
+        # JSON dan migratsiya
+        await migrate_from_json()
+
         bot_info = await application.bot.get_me()
         BOT_USERNAME = bot_info.username
         logger.info(f"Bot username: @{BOT_USERNAME}")

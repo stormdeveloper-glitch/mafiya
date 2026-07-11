@@ -11,6 +11,8 @@ from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 from database import DB, get_uid_data
 
+import asyncio
+
 # Flask App Sozlamalari
 app = Flask(__name__, static_folder='web')
 # Barcha serverlardan kelgan so'rovlarga ruxsat berish (Distributed hosting uchun)
@@ -41,9 +43,9 @@ def get_config():
     })
 
 @app.route('/api/stats')
-def get_stats():
+async def get_stats():
     try:
-        total_users = DB.get_total_users()
+        total_users = await DB.get_total_users()
         total_clones = len(processes) - 1 if len(processes) > 0 else 0
         return jsonify({
             "status": "online",
@@ -75,7 +77,7 @@ def check_telegram_hash(auth_data, bot_token):
     return hash_hmac == check_hash
 
 @app.route('/api/login', methods=['POST'])
-def login():
+async def login():
     data = request.json
     if not data or 'hash' not in data:
         return jsonify({"success": False, "error": "No data"}), 400
@@ -97,10 +99,10 @@ def login():
         return jsonify({"success": False, "error": "Telegram tasdiqlash xatosi (Hash match failed)"}), 401
     
     uid = int(data.get('id', 0))
-    user = get_uid_data(uid)
+    user = await get_uid_data(uid)
     
     # Admin tekshirish
-    is_admin = uid == int(os.getenv("ADMIN_ID", 0)) or uid in DB.get_admins()
+    is_admin = uid == int(os.getenv("ADMIN_ID", 0)) or uid in await DB.get_admins()
     
     return jsonify({
         "success": True,
@@ -113,8 +115,8 @@ def login():
     })
 
 @app.route('/api/user/<int:uid>')
-def get_user_profile(uid):
-    user = DB.get_user(uid)
+async def get_user_profile(uid):
+    user = await DB.get_user(uid)
     if not user:
         return jsonify({"error": "Not found"}), 404
     return jsonify(user)
@@ -122,44 +124,44 @@ def get_user_profile(uid):
 # ── TOURNAMENT API ──
 
 @app.route('/api/tournaments', methods=['GET'])
-def list_tournaments():
-    return jsonify(DB.get_tournaments())
+async def list_tournaments():
+    return jsonify(await DB.get_tournaments())
 
 @app.route('/api/tournaments', methods=['POST'])
-def create_tournament():
+async def create_tournament():
     data = request.json
     if not data or 'name' not in data:
         return jsonify({"success": False, "error": "Name required"}), 400
     
     prize = int(data.get('prize_amount', 0))
-    DB.create_tournament(data['name'], prize)
+    await DB.create_tournament(data['name'], prize)
     return jsonify({"success": True})
 
 @app.route('/api/tournaments/<int:tid>/join', methods=['POST'])
-def join_tournament(tid):
+async def join_tournament(tid):
     data = request.json
     uid = data.get('uid')
     if not uid:
         return jsonify({"success": False, "error": "UID required"}), 400
-    DB.join_tournament(tid, uid)
+    await DB.join_tournament(tid, uid)
     return jsonify({"success": True})
 
 @app.route('/api/tournaments/<int:tid>/leaderboard', methods=['GET'])
-def get_leaderboard(tid):
-    return jsonify(DB.get_tournament_leaderboard(tid))
+async def get_leaderboard(tid):
+    return jsonify(await DB.get_tournament_leaderboard(tid))
 
 @app.route('/api/tournaments/<int:tid>/status', methods=['POST'])
-def update_status(tid):
+async def update_status(tid):
     data = request.json
     status = data.get('status')
     if not status:
         return jsonify({"success": False, "error": "Status required"}), 400
-    DB.update_tournament_status(tid, status)
+    await DB.update_tournament_status(tid, status)
     return jsonify({"success": True})
 
 @app.route('/api/tournaments/<int:tid>/finish', methods=['POST'])
-def finish_tournament(tid):
-    result = DB.finish_tournament(tid)
+async def finish_tournament(tid):
+    result = await DB.finish_tournament(tid)
     if not result:
         return jsonify({"success": False, "error": "Could not finish tournament"}), 400
     return jsonify({"success": True, "winner_uid": result['uid'], "prize": result['prize']})
