@@ -77,7 +77,7 @@ if not BOT_TOKEN:
 
 MAX_GAMES = 100
 COMMAND_COOLDOWN = 2
-MIN_PLAYERS = 3
+MIN_PLAYERS = 5
 MAX_PLAYERS = 50
 
 DAY_IMAGE_URL = os.getenv("DAY_IMAGE_URL", "https://t.me/c/3882935867/12")
@@ -814,6 +814,18 @@ async def _compose_and_send_private_role(context, player: Player, game: Game):
     elif role == "killer":
         text = "🕵️ Siz — KOMISSARSIZ.\n\n🎯 Vazifangiz:\nHar kecha bitta o'yinchini tekshiring.\n\n🤫 Rolingizni hech kimga aytmang."
 
+    elif role == "sheriff":
+        text = "🕵️‍♂️ Siz — SHERIFFSIZ.\n\n🎯 Vazifangiz:\nHar kecha bir o'yinchini tekshirib, mafiyani toping.\n\n🤫 Rolingizni hech kimga aytmang."
+
+    elif role == "maniac":
+        text = "🔪 Siz — TELBASIZ.\n\n🎯 Vazifangiz:\nHar kecha bir o'yinchini yo'q qiling. Yolg'iz qolib g'alaba qozoning.\n\n🤫 Rolingizni hech kimga aytmang."
+
+    elif role == "samurai":
+        text = "⚔️ Siz — SAMURAYSIZ.\n\n🎯 Vazifangiz:\nHar kecha bir o'yinchiga hujum qiling. Begunohga hujum qilsangiz, siz ham halok bo'lasiz.\n\n🤫 Rolingizni hech kimga aytmang."
+
+    elif role == "ninja":
+        text = "👁️ Siz — NINJASIZ.\n\n🎯 Vazifangiz:\nHar kecha bir o'yinchini kuzating va unga kim kelganini biling.\n\n🤫 Rolingizni hech kimga aytmang."
+
     else:
         text = "👤 Siz — FUQAROSIZ.\n\n🎯 Vazifangiz:\nMafiyani topishga yordam bering va ovoz berishda faol ishtirok eting.\n\n🤫 Rolingizni hech kimga aytmang."
 
@@ -829,6 +841,18 @@ async def _compose_and_send_private_role(context, player: Player, game: Game):
         elif role == "killer":
             targets = [p for p in game.players.values() if p.alive and p.id != uid]
             kb = [[InlineKeyboardButton(f"🔍 {x.name}", callback_data=f"killer_check_{game.chat_id}_{x.id}")] for x in targets]
+        elif role == "sheriff":
+            targets = [p for p in game.players.values() if p.alive and p.id != uid]
+            kb = [[InlineKeyboardButton(f"🕵️‍♂️ {x.name}", callback_data=f"sheriff_check_{game.chat_id}_{x.id}")] for x in targets]
+        elif role == "maniac":
+            targets = [p for p in game.players.values() if p.alive and p.id != uid]
+            kb = [[InlineKeyboardButton(f"🔪 {x.name}", callback_data=f"maniac_kill_{game.chat_id}_{x.id}")] for x in targets]
+        elif role == "samurai":
+            targets = [p for p in game.players.values() if p.alive and p.id != uid]
+            kb = [[InlineKeyboardButton(f"⚔️ {x.name}", callback_data=f"samurai_kill_{game.chat_id}_{x.id}")] for x in targets]
+        elif role == "ninja":
+            targets = [p for p in game.players.values() if p.alive and p.id != uid]
+            kb = [[InlineKeyboardButton(f"👁️ {x.name}", callback_data=f"ninja_watch_{game.chat_id}_{x.id}")] for x in targets]
 
         if kb:
             await context.bot.send_message(uid, text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
@@ -849,10 +873,10 @@ async def check_win_conditions(context, chat_id: int) -> Optional[str]:
     maniacs = [p for p in alive if p.role == "maniac"]
     good = [p for p in alive if p.role not in ("mafia", "don", "maniac")]
 
-    if maniacs:
-        if len(alive) <= 2:
-            return "maniac"
-        return None
+    # Maniac is a neutral role: it only wins when it is the sole survivor.
+    # Its presence must not prevent the mafia/citizen win conditions forever.
+    if len(alive) == 1 and maniacs:
+        return "maniac"
 
     if len(mafia) == 0:
         return "good"
@@ -1214,6 +1238,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         if uid in game.players:
             await update.message.reply_text(t(uid, "already_joined"))
+            return
+        if len(game.players) >= MAX_PLAYERS:
+            await update.message.reply_text(f"O'yin uchun maksimal {MAX_PLAYERS} ta o'yinchi qabul qilinadi.")
             return
 
         first_name = update.effective_user.first_name
@@ -2015,14 +2042,16 @@ async def _registration_timer(context, chat_id: int, bot_name: str):
 
 
 async def start_game(context, chat_id: int):
-    """Yangi round boshlash (faqat tirik o'yinchilar bilan)"""
+    """Registrationdan o'yinni boshlaydi yoki keyingi tunni ochadi."""
     game = games.get(chat_id)
     if not game or game.state == "stopped":
         return
 
     alive_players = {uid: p for uid, p in game.players.items() if p.alive}
 
-    if len(alive_players) < MIN_PLAYERS:
+    # Minimum player count applies only before the first role distribution.
+    # A running game must continue normally after eliminations.
+    if game.state == "registration" and len(alive_players) < MIN_PLAYERS:
         ref_uid = next(iter(game.players), 0)
         try:
             await context.bot.send_message(
@@ -2038,7 +2067,12 @@ async def start_game(context, chat_id: int):
         return
 
     try:
-        await _start_game_inner(context, chat_id, game, alive_players)
+        # Roles are assigned once, when registration closes.  Later calls come
+        # from voting and must only start the next night with the same roles.
+        if game.state == "registration":
+            await _start_game_inner(context, chat_id, game, alive_players)
+        else:
+            await _start_next_night(context, chat_id, game)
     except Exception as e:
         logger.error(f"start_game: kutilmagan xatolik (chat {chat_id}): {e}", exc_info=True)
         try:
@@ -2068,7 +2102,6 @@ async def _start_game_inner(context, chat_id: int, game: "Game", alive_players: 
         udata = await get_uid_data(pid)
         if udata.get("active_role", 0) > 0:
             guaranteed_active.append(pid)
-            await DB.update_user(pid, active_role=udata["active_role"] - 1)
 
     roles = role_pool(len(alive_players))
     
@@ -2090,6 +2123,7 @@ async def _start_game_inner(context, chat_id: int, game: "Game", alive_players: 
     for pid, r in assigned_roles.items():
         p = alive_players[pid]
         p.role = r
+        p.role_delivered = False
         udata = await get_uid_data(pid)
         lang_code = udata.get("lang", "uz")
         p.character = get_role_details(r, lang_code)
@@ -2101,6 +2135,12 @@ async def _start_game_inner(context, chat_id: int, game: "Game", alive_players: 
             logger.info(f"Player {pid} used a shield from inventory. Game shield: 2")
         else:
             p.shield = 1  # Har roundda default shield
+
+    # Consume Active Role only for players who actually received a non-citizen role.
+    for pid in guaranteed_active:
+        if assigned_roles.get(pid) != "citizen":
+            udata = await get_uid_data(pid)
+            await DB.update_user(pid, active_role=max(0, udata.get("active_role", 0) - 1))
 
     try:
         role_emojis = {
@@ -2154,6 +2194,21 @@ async def _start_game_inner(context, chat_id: int, game: "Game", alive_players: 
         logger.error(f"Error sending group deep-link announce: {e}")
 
     asyncio.create_task(_night_timer(context, chat_id))
+
+
+async def _start_next_night(context, chat_id: int, game: "Game"):
+    """Continue an existing game without redistributing roles or inventory."""
+    game.state = "night"
+    game.round += 1
+    game.private_votes.clear()
+    game.night_actions = []
+    game.public_votes = {"like": set(), "dislike": set()}
+    game.used_night.clear()
+    try:
+        await context.bot.send_message(game.chat_id, "🌙 Kecha boshlandi. Tungi amal uchun shaxsiy rolingiz xabaridagi tugmalardan foydalaning.")
+    except Exception as e:
+        logger.error(f"Error sending next-night message: {e}")
+    asyncio.create_task(_night_timer(context, game.chat_id))
 
 async def _night_timer(context, chat_id: int):
     await asyncio.sleep(NIGHT_DURATION * adm.get_speed(chat_id))
@@ -2365,7 +2420,7 @@ async def _voting_timer(context, chat_id: int):
         await finish_voting(context, chat_id)
 
 async def finish_voting(context, chat_id: int):
-    """Ovoz berish natijasini ko'rish va final ovozga o'tish"""
+    """Ovoz berish natijasini hisoblash va aybdorni darhol osish."""
     game = games.get(chat_id)
     if not game:
         return
@@ -2386,7 +2441,17 @@ async def finish_voting(context, chat_id: int):
     vote_count: Dict[int, int] = {}
     for v in votes.values():
         vote_count[v] = vote_count.get(v, 0) + 1
-    target = max(vote_count, key=vote_count.get)
+    max_votes = max(vote_count.values())
+    top_targets = [pid for pid, count in vote_count.items() if count == max_votes]
+    if len(top_targets) != 1:
+        try:
+            await context.bot.send_message(chat_id, "⚖️ Ovozlar teng chiqdi. Hech kim osilmadi.")
+        except Exception as e:
+            logger.error(f"Error sending tied-vote message: {e}")
+        await start_game(context, chat_id)
+        return
+
+    target = top_targets[0]
 
     if target not in game.players:
         await start_game(context, chat_id)
@@ -2396,47 +2461,29 @@ async def finish_voting(context, chat_id: int):
     target_vote_count = vote_count[target]
     total_voters = len(votes)
 
-    game.state = "final_vote"
-    game.public_votes = {"like": set(), "dislike": set()}
-    game._accused_target = target
-
-    hang_count = 0
-    save_count = 0
-    voter_count = len([p for p in game.players.values() if p.alive and p.id != target])
-
-    group_text = (
-        f"⚖️ <b>AYBLOV!</b>\n\n"
-        f"👤 Ayblanuvchi: <b>{html.escape(target_name)}</b>\n"
-        f"🗳️ Unga qarshi ovozlar: <b>{target_vote_count}/{total_voters}</b>\n\n"
-        f"👍 Osish: <b>0</b>  |  👎 Saqlash: <b>0</b>\n"
-        f"📊 {voter_count} nafar ovoz berishi kerak\n\n"
-        f"⏱ Ovoz bering!"
-    )
-
-    kb = InlineKeyboardMarkup([[
-        InlineKeyboardButton(f"👍 Osish ({hang_count})", callback_data=f"fvote_h_{target}_{chat_id}"),
-        InlineKeyboardButton(f"👎 Saqlash ({save_count})", callback_data=f"fvote_s_{target}_{chat_id}")
-    ]])
-
-    try:
-        vote_msg = await context.bot.send_message(
-            chat_id, group_text, parse_mode="HTML", reply_markup=kb
-        )
-        game._vote_msg_id = vote_msg.message_id
-    except Exception as e:
-        logger.error(f"Error sending final vote message: {e}")
-        game._vote_msg_id = None
-
+    game.players[target].alive = False
+    role_labels = {
+        "don": "👔 DON", "mafia": "🔪 MAFIA", "doctor": "💚 SHIFOKOR",
+        "killer": "🔎 KOMISSAR", "sheriff": "🕵️‍♂️ SHERIF", "maniac": "🔪 TELBA",
+        "samurai": "⚔️ SAMURAY", "ninja": "👁️ NINJA", "citizen": "👤 FUQARO",
+    }
+    role_label = role_labels.get(game.players[target].role, game.players[target].role or "?")
     try:
         await context.bot.send_message(
-            target,
-            f"⚖️ <b>Siz ayblanmoqdasiz!</b>\n\n"
-            f"👥 O'yinchilar osish yoki saqlash haqida ovoz bermoqda...\n"
-            f"Natijani guruhda kuting.",
-            parse_mode="HTML"
+            chat_id,
+            f"⚖️ <b>OVOZ NATIJASI</b>\n\n"
+            f"👤 <b>{html.escape(target_name)}</b> eng ko'p ovoz oldi: <b>{target_vote_count}/{total_voters}</b>.\n"
+            f"💀 U osib o'ldirildi.\n🎭 Uning roli: <b>{role_label}</b>",
+            parse_mode="HTML",
         )
-    except:
-        pass
+    except Exception as e:
+        logger.error(f"Error sending hanging result: {e}")
+
+    winner = await check_win_conditions(context, chat_id)
+    if winner:
+        await end_game(context, chat_id, winner)
+    else:
+        await start_game(context, chat_id)
 
 async def end_game(context, chat_id: int, winner: str):
     """O'yinni tugatish"""
@@ -2582,6 +2629,12 @@ async def roles_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
          InlineKeyboardButton("🔪 Maniac", callback_data="role_info_maniac")],
         [InlineKeyboardButton("⚔️ Samurai", callback_data="role_info_samurai"),
          InlineKeyboardButton("👁️ Ninja", callback_data="role_info_ninja")],
+        [InlineKeyboardButton("💃 Ma'shuqa", callback_data="role_info_hooker"),
+         InlineKeyboardButton("👨‍⚖️ Advokat", callback_data="role_info_lawyer")],
+        [InlineKeyboardButton("🙍 Suisid", callback_data="role_info_suicide"),
+         InlineKeyboardButton("🧙 Daydi", callback_data="role_info_hobo")],
+        [InlineKeyboardButton("🤞 Omadli", callback_data="role_info_lucky"),
+         InlineKeyboardButton("💣 Kamikaze", callback_data="role_info_kamikaze")],
         [InlineKeyboardButton("👤 Citizen", callback_data="role_info_citizen")],
     ]
     
@@ -2610,6 +2663,12 @@ async def role_info_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         "maniac": "🔪 <b>MANIAC (Manyak)</b>\n\n• Kechasi: Xohlagan kishini o'ldiradi.\n• Yolg'iz o'zi yutishi kerak (yoki 1vs1 qolsa).",
         "samurai": "⚔️ <b>SAMURAI</b>\n\n• Premium rol.\n• Kechasi: Bir kishini o'ldirishi mumkin.\n• Agar begunoh fuqaroni o'ldirsa, o'zi ham o'ladi (Seppuku).",
         "ninja": "👁️ <b>NINJA</b>\n\n• Premium rol.\n• Kechasi: Bir kishini kuzatadi.\n• Agar u kishiga kimdir tashrif buyursa (mafia, doctor, killer...), Ninja buni biladi.",
+        "hooker": "💃 <b>MA'SHUQA</b>\n\n• Siz shu shaharda tirik qolishingiz kerak.\n• Bir kun davomida har qanday shaxsni zararsizlantirish uchun o'z mahoratingizni ko'rsating.",
+        "lawyer": "👨‍⚖️ <b>ADVOKAT</b>\n\n• Kechasi: Bir o'yinchini kunduzgi osilishdan himoya qiladi.\n• Maqsad: Tinch aholini saqlab qolish.",
+        "suicide": "🙍 <b>SUISID</b>\n\n• Maxsus neytral rol.\n• Maqsad: O'z qoidasi bo'yicha xavfli vaziyatda g'alaba qozonish.",
+        "hobo": "🧙 <b>DAYDI</b>\n\n• Siz xohlagan odamning uyiga shisha olish uchun borishingiz mumkin.\n• Shu tariqa qotillikning guvohi bo'lib qolishingiz mumkin.",
+        "lucky": "🤞 <b>OMADLI</b>\n\n• Vazifangiz mafiya va yovuzlarni shahar yig'ilishida osish.\n• Agar omadingiz kelsa, siz omon qolasiz.",
+        "kamikaze": "💣 <b>KAMIKAZE</b>\n\n• Tun va kunda siz tinch aholisisiz.\n• Ammo sizni osishganda, xohlagan o'yinchini o'zingiz bilan qabrga olib ketishingiz mumkin.",
         "citizen": "👤 <b>CITIZEN (Fuqaro)</b>\n\n• Kechasi: Uxlaydi.\n• Kunduz: Muhokamada qatnashadi va ovoz beradi.\n• Maqsad: Mafiyani topib osish."
     }
     
@@ -2747,7 +2806,7 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await safe_answer()
             return
         game = games.get(group_chat_id)
-        if game and game.state == "night" and uid in game.players and game.players[uid].role in ("mafia", "don"):
+        if game and game.state == "night" and uid in game.players and game.players[uid].alive and game.players[uid].role in ("mafia", "don"):
             if target in game.players and game.players[target].alive:
                 game.night_actions = [a for a in game.night_actions if not (a["type"] == "kill" and a["actor"] == uid)]
                 game.night_actions.append({"type": "kill", "actor": uid, "target": target})
@@ -2767,7 +2826,7 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await safe_answer()
             return
         game = games.get(group_chat_id)
-        if game and game.state == "night" and uid in game.players and game.players[uid].role == "doctor":
+        if game and game.state == "night" and uid in game.players and game.players[uid].alive and game.players[uid].role == "doctor":
             if target in game.players and game.players[target].alive:
                 game.night_actions = [a for a in game.night_actions if not (a["type"] == "heal" and a["actor"] == uid)]
                 game.night_actions.append({"type": "heal", "actor": uid, "target": target})
@@ -2787,7 +2846,7 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await safe_answer()
             return
         game = games.get(group_chat_id)
-        if game and game.state == "night" and uid in game.players and game.players[uid].role == "killer":
+        if game and game.state == "night" and uid in game.players and game.players[uid].alive and game.players[uid].role == "killer":
             if target in game.players and game.players[target].alive:
                 if not any(a["type"] == "investigate" and a["actor"] == uid for a in game.night_actions):
                     game.night_actions.append({"type": "investigate", "actor": uid, "target": target})
@@ -2809,7 +2868,7 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await safe_answer()
             return
         game = games.get(group_chat_id)
-        if game and game.state == "night" and uid in game.players and game.players[uid].role == "sheriff":
+        if game and game.state == "night" and uid in game.players and game.players[uid].alive and game.players[uid].role == "sheriff":
             if target in game.players and game.players[target].alive:
                 game.night_actions = [a for a in game.night_actions if not (a["type"] == "sheriff_check" and a["actor"] == uid)]
                 game.night_actions.append({"type": "sheriff_check", "actor": uid, "target": target})
@@ -2829,7 +2888,7 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await safe_answer()
             return
         game = games.get(group_chat_id)
-        if game and game.state == "night" and uid in game.players and game.players[uid].role == "maniac":
+        if game and game.state == "night" and uid in game.players and game.players[uid].alive and game.players[uid].role == "maniac":
             if target in game.players and game.players[target].alive:
                 game.night_actions = [a for a in game.night_actions if not (a["type"] == "maniac_kill" and a["actor"] == uid)]
                 game.night_actions.append({"type": "maniac_kill", "actor": uid, "target": target})
@@ -2968,7 +3027,11 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     except:
                         pass
 
-            asyncio.create_task(start_game(context, group_chat_id))
+            winner = await check_win_conditions(context, group_chat_id)
+            if winner:
+                await end_game(context, group_chat_id, winner)
+            else:
+                await start_game(context, group_chat_id)
 
     elif q.data.startswith("buy_"):
         item = "_".join(q.data.split("_")[1:])  # "active_role" to'g'ri olinadi
@@ -3028,7 +3091,7 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await safe_answer()
             return
         game = games.get(group_chat_id)
-        if game and game.state == "night" and uid in game.players and game.players[uid].role == "samurai":
+        if game and game.state == "night" and uid in game.players and game.players[uid].alive and game.players[uid].role == "samurai":
             if target in game.players and game.players[target].alive:
                 game.night_actions = [a for a in game.night_actions if not (a["type"] == "samurai_kill" and a["actor"] == uid)]
                 game.night_actions.append({"type": "samurai_kill", "actor": uid, "target": target})
@@ -3048,7 +3111,7 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await safe_answer()
             return
         game = games.get(group_chat_id)
-        if game and game.state == "night" and uid in game.players and game.players[uid].role == "ninja":
+        if game and game.state == "night" and uid in game.players and game.players[uid].alive and game.players[uid].role == "ninja":
             if target in game.players and game.players[target].alive:
                 game.night_actions = [a for a in game.night_actions if not (a["type"] == "ninja_watch" and a["actor"] == uid)]
                 game.night_actions.append({"type": "ninja_watch", "actor": uid, "target": target})
